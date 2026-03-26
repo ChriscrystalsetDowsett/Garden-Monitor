@@ -1,20 +1,20 @@
-"""Camera hardware management, OpenCV post-processing pipeline, and stream output."""
-import io, time, threading, subprocess
+"""Camera hardware management, picamera2 post-processing pipeline, and stream output."""
+import io, time, threading
 from datetime import datetime
 
 import cv2
 import numpy as np
 from PIL import Image, ImageEnhance, ImageFilter, ImageOps
+from picamera2 import Picamera2
 
 from .config import SNAPSHOT_DIR, RESOLUTIONS, CAM_CTRL_DEFAULTS, DEFAULT_RESOLUTION
 from .film import FILM_FILTERS
 from .postprocess import postprocess_jpeg
 
-DEVICE       = "/dev/video0"
 FPS          = 24
 JPEG_QUALITY = 85
 
-# ── Live camera controls (OpenCV per-frame effects) ────────────────────────────
+# ── Live camera controls (per-frame effects + ISP) ─────────────────────────────
 # Shared mutable state; protected by cam_ctrl_lock.
 cam_ctrl = dict(CAM_CTRL_DEFAULTS)
 cam_ctrl_lock = threading.Lock()
@@ -22,8 +22,7 @@ cam_ctrl_lock = threading.Lock()
 
 # ── OpenCV post-processing ─────────────────────────────────────────────────────
 def _apply_ocv(buf, s):
-    """Post-processing: tint shift, flip, film simulation.
-    Brightness/contrast/saturation/sharpness are handled by V4L2 hardware."""
+    """Post-processing: tint shift, flip, film simulation."""
     try:
         arr   = np.frombuffer(buf, dtype=np.uint8)
         frame = cv2.imdecode(arr, cv2.IMREAD_COLOR)
@@ -143,58 +142,67 @@ class CameraManager:
         self.output      = StreamOutput()
         self.res_key     = DEFAULT_RESOLUTION
         self.resolution  = RESOLUTIONS[self.res_key]
-        self.model       = "C930e"
+        self.model       = "Unknown"
         self._stop       = threading.Event()
         self._restart    = threading.Event()
-        self._current_cap = None
+        self._picam2     = None
         threading.Thread(target=self._capture_loop, daemon=True, name="capture").start()
 
-    def _open_cap(self):
+    def _open_camera(self):
         w, h = self.resolution
-        cap = cv2.VideoCapture(DEVICE, cv2.CAP_V4L2)
-        if not cap.isOpened():
-            cap.release()
+        try:
+            picam2 = Picamera2()
+            self.model = picam2.camera_properties.get("Model", "Unknown").upper()
+            config = picam2.create_video_configuration(
+                main={"format": "RGB888", "size": (w, h)},
+                controls={"FrameRate": float(FPS)},
+                buffer_count=2,
+            )
+            picam2.configure(config)
+            picam2.start()
+            return picam2
+        except Exception:
             return None
-        cap.set(cv2.CAP_PROP_FOURCC,      cv2.VideoWriter_fourcc(*"MJPG"))
-        cap.set(cv2.CAP_PROP_FRAME_WIDTH,  w)
-        cap.set(cv2.CAP_PROP_FRAME_HEIGHT, h)
-        cap.set(cv2.CAP_PROP_FPS,          FPS)
-        cap.set(cv2.CAP_PROP_BUFFERSIZE,   1)
-        return cap
 
     def _capture_loop(self):
         backoff = 1
         while not self._stop.is_set():
             self._restart.clear()
-            cap = self._open_cap()
-            if cap is None:
+            picam2 = self._open_camera()
+            if picam2 is None:
                 if self._stop.wait(backoff):
                     break
                 backoff = min(backoff * 2, 30)
                 continue
             backoff = 1
             with self.lock:
-                self._current_cap = cap
+                self._picam2 = picam2
             with cam_ctrl_lock:
                 _init_ctrl = dict(cam_ctrl)
             self.apply_isp_controls(_init_ctrl)
             failures = 0
             while not self._stop.is_set() and not self._restart.is_set():
-                ret, frame = cap.read()
-                if not ret or frame is None:
+                try:
+                    frame = picam2.capture_array("main")
+                except Exception:
                     failures += 1
                     if failures >= 5:
                         break
                     time.sleep(0.05)
                     continue
                 failures = 0
+                # picamera2 RGB888 = V4L2 BGR24: array is already BGR, OpenCV-native
                 ok, buf = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, JPEG_QUALITY])
                 if ok:
                     self.output.write(buf.tobytes())
-            cap.release()
+            try:
+                picam2.stop()
+                picam2.close()
+            except Exception:
+                pass
             with self.lock:
-                if self._current_cap is cap:
-                    self._current_cap = None
+                if self._picam2 is picam2:
+                    self._picam2 = None
             if not self._stop.is_set() and not self._restart.is_set():
                 if self._stop.wait(backoff):
                     break
@@ -239,66 +247,63 @@ class CameraManager:
         return filename
 
     def apply_isp_controls(self, c):
-        """Push V4L2 hardware controls. Called on user changes and after camera (re)open.
+        """Push picamera2 ISP controls to the camera module.
 
-        C930e V4L2 ranges (from v4l2-ctl --list-ctrls):
-          brightness/contrast/saturation/sharpness: 0–255, default 128
-          white_balance_temperature: 2000–7500 K, default 4000
-          gain: 0–255
-          exposure_time_absolute: 3–2047 (×100 µs units)
+        picamera2 control ranges:
+          Brightness:        -1.0 to 1.0   (0.0 = neutral)
+          Saturation:         0.0 to 2.0   (1.0 = neutral)
+          Sharpness:          0.0 to 16.0  (1.0 = neutral)
+          Contrast:           0.0 to 32.0  (1.0 = neutral)
+          ExposureTime:       microseconds (requires AeEnable=False)
+          AnalogueGain:       float        (requires AeEnable=False)
+          AwbEnable:          bool
+          ColourTemperature:  2000-7500 K  (requires AwbEnable=False)
         """
         with self.lock:
-            cap = self._current_cap
-        if cap is None:
+            picam2 = self._picam2
+        if picam2 is None:
             return
         try:
+            controls = {}
+
             # ── Exposure ──────────────────────────────────────────────────────
             exp = int(c.get("exposure_time", 0))
             if exp > 0:
-                cap.set(cv2.CAP_PROP_AUTO_EXPOSURE, 1)   # V4L2 Manual mode
-                cap.set(cv2.CAP_PROP_EXPOSURE, max(3, exp // 100))
+                controls["AeEnable"] = False
+                controls["ExposureTime"] = exp
             else:
-                cap.set(cv2.CAP_PROP_AUTO_EXPOSURE, 3)   # V4L2 Aperture Priority
+                controls["AeEnable"] = True
 
             # ── Gain ──────────────────────────────────────────────────────────
             gain = float(c.get("analogue_gain", 0.0))
             if gain > 0:
-                cap.set(cv2.CAP_PROP_GAIN, int(min(255, max(0, gain / 16.0 * 255))))
+                controls["AnalogueGain"] = gain
 
             # ── White balance ─────────────────────────────────────────────────
-            # cv2.CAP_PROP_WHITE_BALANCE_BLUE_U maps to V4L2_CID_BLUE_BALANCE,
-            # not white_balance_temperature — use v4l2-ctl directly instead.
             if c.get("awb_mode", "auto") == "auto":
-                subprocess.run(
-                    ["v4l2-ctl", "-d", DEVICE, "--set-ctrl=white_balance_automatic=1"],
-                    capture_output=True, check=False,
-                )
+                controls["AwbEnable"] = True
             else:
+                controls["AwbEnable"] = False
                 kelvin = max(2000, min(7500, int(c.get("awb_kelvin", 5600))))
-                subprocess.run(
-                    ["v4l2-ctl", "-d", DEVICE,
-                     f"--set-ctrl=white_balance_automatic=0,white_balance_temperature={kelvin}"],
-                    capture_output=True, check=False,
-                )
+                controls["ColourTemperature"] = kelvin
 
-            # ── Brightness: UI −100…+100 → V4L2 0–255 (neutral 128) ──────────
+            # ── Brightness: UI −100…+100 → picamera2 −1.0…+1.0 ──────────────
             b = int(c.get("brightness", 0))
-            cap.set(cv2.CAP_PROP_BRIGHTNESS, max(0, min(255, 128 + b * 127 // 100)))
+            controls["Brightness"] = max(-1.0, min(1.0, b / 100.0))
 
-            # ── Saturation: same mapping as brightness ────────────────────────
+            # ── Saturation: UI −100…+100 → picamera2 0.0…2.0 (neutral 1.0) ──
             sat = int(c.get("saturation", 0))
-            cap.set(cv2.CAP_PROP_SATURATION, max(0, min(255, 128 + sat * 127 // 100)))
+            controls["Saturation"] = max(0.0, min(2.0, 1.0 + sat / 100.0))
 
-            # ── Sharpness: UI 0–4 (neutral 1.0) → V4L2 0–255 (neutral 128) ──
+            # ── Sharpness: UI 0–4 → picamera2 0.0–16.0 (neutral 1.0) ─────────
             sharp = float(c.get("sharpness", 1.0))
-            sv = int(sharp * 128) if sharp <= 1.0 else int(128 + (sharp - 1.0) / 3.0 * 127)
-            cap.set(cv2.CAP_PROP_SHARPNESS, max(0, min(255, sv)))
+            controls["Sharpness"] = max(0.0, min(16.0, sharp))
 
-            # ── Contrast: same mapping as sharpness ───────────────────────────
+            # ── Contrast: UI 0–4 → picamera2 0.0–32.0 (neutral 1.0) ──────────
             contrast = float(c.get("contrast", 1.0))
-            cv_val = int(contrast * 128) if contrast <= 1.0 else int(128 + (contrast - 1.0) / 3.0 * 127)
-            cap.set(cv2.CAP_PROP_CONTRAST, max(0, min(255, cv_val)))
+            controls["Contrast"] = max(0.0, min(32.0, contrast))
 
+            picam2.set_controls(controls)
         except Exception:
             pass
 
@@ -306,11 +311,12 @@ class CameraManager:
         self._stop.set()
         self._restart.set()
         with self.lock:
-            cap = self._current_cap
-            self._current_cap = None
-        if cap is not None:
+            picam2 = self._picam2
+            self._picam2 = None
+        if picam2 is not None:
             try:
-                cap.release()
+                picam2.stop()
+                picam2.close()
             except Exception:
                 pass
 
