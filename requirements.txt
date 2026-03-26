@@ -1,0 +1,9 @@
+flask>=2.0
+picamera2
+psutil
+Pillow
+opencv-python-headless
+numpy
+ffmpeg-python
+pyyaml
+piexif

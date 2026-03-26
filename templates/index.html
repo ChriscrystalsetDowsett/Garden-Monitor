@@ -1,0 +1,2730 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Garden Monitor Pi5</title>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+/* Touch: remove tap flash and prevent accidental text selection on buttons */
+* { -webkit-tap-highlight-color: transparent; }
+button, .btn, .res-opt, .tl-preset, .film-card, .flip-btn, .section-card > button {
+  touch-action: manipulation;
+  user-select: none;
+}
+
+:root {
+  --bg:       #070d07;
+  --surface:  #0d180d;
+  --surface2: #132013;
+  --border:   #1a2e1a;
+  --green:    #22c55e;
+  --green-dk: #166534;
+  --green-md: #16a34a;
+  --green-lt: #4ade80;
+  --amber:    #d97706;
+  --amber-lt: #fbbf24;
+  --text:     #edf6ed;
+  --muted:    #87a887;
+  --dim:      #4a6b4a;
+  --red:      #ef4444;
+  --radius:   12px;
+}
+
+body {
+  background: var(--bg);
+  /* soft canopy-light glow from top */
+  background-image:
+    radial-gradient(ellipse 80% 40% at 50% -5%, rgba(34,197,94,0.07) 0%, transparent 70%);
+  color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-size: 14px;
+  min-height: 100vh;
+}
+
+.container {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 0 18px 36px;
+}
+
+/* ── Inner content wrapper (narrower than feed for hierarchy) ────── */
+.inner-content {
+  max-width: 820px;
+  margin: 0 auto;
+}
+
+/* ── Header ──────────────────────────────────────────────────────── */
+header {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 22px 0 20px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 20px;
+  position: relative;
+}
+
+/* subtle gradient rule beneath header */
+header::after {
+  content: '';
+  position: absolute;
+  bottom: -1px; left: 0; right: 0; height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(34,197,94,0.3), transparent);
+  pointer-events: none;
+}
+
+.header-brand { display: flex; align-items: center; gap: 15px; }
+
+.cam-icon {
+  width: 54px; height: 54px;
+  background: linear-gradient(145deg, #061a0a 0%, #0d3d18 50%, #145c24 100%);
+  border-radius: 15px;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+  box-shadow:
+    0 4px 20px rgba(16,120,48,0.55),
+    0 1px 0 rgba(255,255,255,0.06) inset,
+    0 0 0 1px rgba(34,197,94,0.18);
+}
+
+.header-title {
+  font-size: 19px; font-weight: 700; line-height: 1.15;
+  letter-spacing: -0.02em;
+  background: linear-gradient(135deg, #e8f5e2 20%, #86efac 100%);
+  -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+.header-sub { font-size: 12px; color: var(--muted); margin-top: 3px; letter-spacing: 0.01em; }
+
+.status-pill {
+  display: inline-flex; align-items: center; gap: 7px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 5px 12px;
+  font-size: 12px; font-weight: 500;
+  white-space: nowrap;
+  margin-top: 8px;
+  transition: border-color 0.3s;
+}
+.status-pill.online { border-color: rgba(34,197,94,0.35); }
+
+/* ── Dot ─────────────────────────────────────────────────────────── */
+.dot {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: var(--red);
+  flex-shrink: 0;
+}
+.dot.online {
+  background: var(--green);
+  box-shadow: 0 0 7px var(--green);
+}
+.dot.pulse { animation: pulse 1.8s ease-in-out infinite; }
+@keyframes pulse {
+  0%,100% { opacity: 1; }
+  50%      { opacity: 0.35; }
+}
+
+/* ── Feed ────────────────────────────────────────────────────────── */
+.feed-wrap {
+  position: relative;
+  /* rich dark soil behind the frame */
+  background: #040904;
+  border-radius: var(--radius);
+  overflow: hidden;
+  margin-bottom: 12px;
+  line-height: 0;
+  /* subtle inner glow on the frame edge */
+  box-shadow: inset 0 0 0 1px rgba(34,197,94,0.08),
+              0 4px 24px rgba(0,0,0,0.6);
+}
+
+.feed-wrap img {
+  width: 100%;
+  aspect-ratio: 16/9;
+  display: block;
+  object-fit: contain;
+}
+
+/* thin green gradient wash at the bottom of the feed — like ground */
+.feed-wrap::after {
+  content: '';
+  position: absolute;
+  left: 0; right: 0; bottom: 0; height: 48px;
+  background: linear-gradient(to top, rgba(7,13,7,0.55), transparent);
+  pointer-events: none;
+}
+
+.feed-overlay {
+  position: absolute;
+  top: 10px; left: 10px;
+  display: flex; flex-direction: column; gap: 10px;
+  z-index: 2;
+}
+
+.feed-label {
+  font-size: 13px; font-weight: 500;
+  color: rgba(255,255,255,0.75);
+  text-shadow: 0 1px 4px rgba(0,0,0,0.9);
+}
+
+.res-badge {
+  display: inline-flex; align-items: center; gap: 6px;
+  background: rgba(4,10,4,0.72);
+  backdrop-filter: blur(5px);
+  border-radius: 999px;
+  padding: 4px 10px;
+  font-size: 12px;
+  cursor: pointer;
+  border: 1px solid rgba(34,197,94,0.15);
+  transition: background 0.15s, border-color 0.15s;
+  width: fit-content;
+  user-select: none;
+}
+.res-badge:hover {
+  background: rgba(34,197,94,0.15);
+  border-color: rgba(34,197,94,0.35);
+}
+.res-badge.open { border-color: rgba(34,197,94,0.5); background: rgba(34,197,94,0.15); }
+#res-chevron { transition: transform 0.2s; flex-shrink: 0; }
+.res-badge.open #res-chevron { transform: rotate(180deg); }
+
+/* ── Resolution dropdown on feed ────────────────────────────────── */
+#res-options {
+  position: absolute; top: calc(100% + 5px); left: 0;
+  background: rgba(4,10,4,0.93);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(34,197,94,0.25);
+  border-radius: 9px;
+  padding: 5px;
+  z-index: 20;
+  min-width: 130px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.7);
+}
+.res-dd-opt {
+  display: block; width: 100%;
+  padding: 7px 12px;
+  background: none; border: none; border-radius: 6px;
+  color: rgba(255,255,255,0.75);
+  font-size: 12.5px; font-weight: 500;
+  cursor: pointer; text-align: left;
+  transition: background 0.1s, color 0.1s;
+}
+.res-dd-opt:hover { background: rgba(34,197,94,0.15); color: var(--text); }
+.res-dd-opt.active { color: var(--green-lt); }
+
+/* timelapse toggle button */
+.btn-tl {
+  background: linear-gradient(135deg, var(--green-dk), var(--green-md));
+  color: #fff;
+  box-shadow: 0 2px 10px rgba(22,163,74,0.25);
+}
+.btn-tl.active {
+  animation: tl-pulse 2s ease-in-out infinite;
+}
+@keyframes tl-pulse {
+  0%,100% { box-shadow: 0 0 0 0 rgba(34,197,94,0); }
+  50%      { box-shadow: 0 0 0 7px rgba(34,197,94,0.22); }
+}
+
+/* ── Buttons ─────────────────────────────────────────────────────── */
+.btn {
+  display: inline-flex; align-items: center; gap: 7px;
+  padding: 11px 18px;
+  border: none; border-radius: 10px;
+  cursor: pointer; font-size: 14px; font-weight: 500;
+  transition: opacity 0.15s, transform 0.1s;
+  line-height: 1;
+}
+.btn:hover  { opacity: 0.85; }
+.btn:active { transform: scale(0.97); }
+.btn:disabled { opacity: 0.4; cursor: default; transform: none; }
+
+/* primary: green gradient */
+.btn-primary {
+  background: linear-gradient(135deg, var(--green-dk), var(--green-md));
+  color: #fff;
+  box-shadow: 0 2px 10px rgba(22,163,74,0.25);
+}
+
+/* snapshot: warm amber — sunlight on leaves */
+.btn-amber {
+  background: linear-gradient(135deg, #92400e, var(--amber));
+  color: #fff;
+  box-shadow: 0 2px 10px rgba(217,119,6,0.25);
+}
+
+.btn-secondary {
+  background: var(--surface2); color: var(--text);
+  border: 1px solid var(--border);
+}
+.btn-danger {
+  background: #431407; color: #fca5a5;
+  border: 1px solid #7f1d1d;
+}
+
+/* recording button */
+.btn-rec {
+  background: linear-gradient(135deg, #7f1d1d, #dc2626);
+  color: #fff;
+  box-shadow: 0 2px 10px rgba(220,38,38,0.2);
+}
+.btn-rec.recording {
+  animation: rec-pulse 1.5s ease-in-out infinite;
+}
+@keyframes rec-pulse {
+  0%,100% { box-shadow: 0 0 0 0 rgba(239,68,68,0); }
+  50%      { box-shadow: 0 0 0 6px rgba(239,68,68,0.25); }
+}
+
+/* ── Live controls ───────────────────────────────────────────────── */
+#live-section { display: flex; flex-direction: column; gap: 12px; }
+
+.live-actions { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+
+.res-row {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px 16px;
+}
+
+.section-label {
+  font-size: 11px; font-weight: 600; letter-spacing: 0.07em;
+  color: var(--dim); text-transform: uppercase;
+  margin-bottom: 10px;
+  display: flex; align-items: center; gap: 6px;
+}
+/* small leaf bullet before section labels */
+.section-label::before {
+  content: '';
+  display: inline-block;
+  width: 6px; height: 8px;
+  background: var(--green-md);
+  clip-path: polygon(50% 0%, 100% 40%, 70% 100%, 30% 100%, 0% 40%);
+  opacity: 0.7;
+  flex-shrink: 0;
+}
+
+.res-buttons { display: flex; gap: 8px; flex-wrap: wrap; }
+
+.res-opt {
+  padding: 7px 13px;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  color: var(--muted); cursor: pointer;
+  font-size: 13px; font-weight: 500;
+  transition: all 0.15s;
+}
+.res-opt:hover { border-color: var(--green-md); color: var(--text); }
+.res-opt.active {
+  background: rgba(22,163,74,0.18);
+  border-color: var(--green-md);
+  color: var(--green-lt);
+}
+
+/* ── Timelapse settings card ─────────────────────────────────────── */
+.tl-settings {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 18px 20px;
+  margin-bottom: 12px;
+  overflow: hidden;
+  max-height: 2000px;
+  opacity: 1;
+  transform: translateY(0);
+  transition: max-height 0.45s cubic-bezier(0.4,0,0.2,1),
+              opacity 0.3s ease,
+              transform 0.3s ease,
+              margin-bottom 0.35s ease,
+              padding-top 0.3s ease,
+              padding-bottom 0.3s ease;
+}
+
+.panel-closed {
+  max-height: 0 !important;
+  opacity: 0 !important;
+  transform: translateY(-6px) !important;
+  margin-bottom: 0 !important;
+  padding-top: 0 !important;
+  padding-bottom: 0 !important;
+  pointer-events: none;
+}
+.tl-divider {
+  border: none; border-top: 1px solid var(--border);
+  margin: 14px 0;
+}
+
+.tl-header {
+  display: flex; justify-content: space-between; align-items: center;
+  margin-bottom: 14px;
+}
+
+.tl-value-display {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-size: 22px; font-weight: 700;
+  color: var(--green-lt); letter-spacing: 0.04em;
+}
+
+/* Custom slider */
+.slider-wrap { margin-bottom: 8px; }
+
+input[type=range] {
+  -webkit-appearance: none; appearance: none;
+  width: 100%; height: 4px;
+  background: var(--border);
+  border-radius: 2px;
+  outline: none; cursor: pointer;
+  touch-action: none;
+}
+input[type=range]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 22px; height: 22px; border-radius: 50%;
+  background: var(--green-md);
+  border: 2px solid #d1fae5;
+  box-shadow: 0 0 8px rgba(34,197,94,0.5);
+  cursor: grab;
+  transition: transform 0.1s;
+}
+input[type=range]::-webkit-slider-thumb:active { cursor: grabbing; transform: scale(1.15); }
+input[type=range]:disabled::-webkit-slider-thumb { background: var(--dim); box-shadow: none; cursor: default; }
+
+/* Colour-temperature slider — warm→cool gradient track */
+.ktemp-wrap input[type=range] {
+  background: linear-gradient(to right, #3b82f6, #bae6fd, #fef9c3, #fbbf24, #f97316);
+}
+.ktemp-wrap input[type=range]:disabled { opacity: 0.45; cursor: default; }
+
+/* Colour tint slider — green→neutral→magenta */
+.tint-wrap input[type=range] {
+  background: linear-gradient(to right, #22c55e, #888888, #d946ef);
+}
+
+/* Feed overlay flip buttons */
+.feed-flip-btns {
+  position: absolute; bottom: 10px; left: 10px; z-index: 3;
+  display: flex; gap: 5px;
+}
+.flip-btn {
+  display: inline-flex; align-items: center; gap: 5px;
+  background: rgba(4,10,4,0.72);
+  backdrop-filter: blur(5px);
+  border: 1px solid rgba(34,197,94,0.15);
+  border-radius: 999px;
+  padding: 4px 10px 4px 8px;
+  font-size: 12px; font-weight: 500;
+  color: rgba(255,255,255,0.7);
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+  white-space: nowrap;
+  user-select: none;
+}
+.flip-btn:hover {
+  background: rgba(34,197,94,0.15);
+  border-color: rgba(34,197,94,0.35);
+  color: #fff;
+}
+.flip-btn.active {
+  background: rgba(34,197,94,0.2);
+  border-color: rgba(34,197,94,0.5);
+  color: var(--green-lt);
+}
+
+.tl-presets {
+  display: flex; justify-content: space-between;
+  margin-bottom: 20px;
+}
+.tl-preset {
+  font-size: 12px; color: var(--dim);
+  cursor: pointer; padding: 3px 4px;
+  border-radius: 4px; transition: color 0.12s;
+  user-select: none;
+}
+.tl-preset:hover { color: var(--muted); }
+.tl-preset.active { color: var(--green-lt); font-weight: 600; }
+
+.tl-bottom { display: flex; justify-content: space-between; align-items: flex-end; }
+
+/* ── Timelapse status block ───────────────────────────────────── */
+.tl-status-block {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+}
+.tl-prog-track {
+  height: 2px;
+  background: var(--border);
+}
+.tl-prog-fill {
+  height: 100%; width: 0%;
+  background: linear-gradient(90deg, var(--green-md), var(--green-lt));
+  transition: width 1.2s linear;
+}
+.tl-time-row {
+  display: flex;
+  align-items: stretch;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--border);
+}
+.tl-time-col { flex: 1; text-align: center; }
+.tl-time-sep {
+  width: 1px; background: var(--border);
+  margin: 0 10px; align-self: stretch;
+}
+.tl-time-val {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-size: 22px; font-weight: 700;
+  color: var(--green-lt);
+  letter-spacing: 0.04em; line-height: 1;
+}
+.tl-time-val--dim { color: var(--muted); }
+.tl-time-lbl {
+  font-size: 9px; color: var(--dim);
+  letter-spacing: 0.08em; text-transform: uppercase;
+  margin-top: 4px;
+}
+.tl-capture-row {
+  display: grid;
+  grid-template-columns: 1fr 1px 1fr;
+  align-items: center;
+  padding: 16px 0;
+}
+.tl-capture-col {
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  text-align: center; padding: 0 10px;
+}
+.tl-capture-sep {
+  background: var(--border);
+  align-self: stretch;
+}
+/* Left: frame count */
+.tl-frame-num {
+  display: block;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-size: 28px; font-weight: 700;
+  color: var(--green-lt); letter-spacing: 0.04em;
+  line-height: 1;
+}
+.tl-frame-lbl {
+  display: block;
+  font-size: 9px; color: var(--dim);
+  text-transform: uppercase; letter-spacing: 0.08em;
+  margin-top: 6px;
+}
+/* Right: video length */
+.tl-videst {
+  display: block;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-size: 28px; font-weight: 700;
+  color: var(--green-lt); letter-spacing: 0.04em;
+  line-height: 1;
+}
+.tl-videst-lbl {
+  display: block;
+  font-size: 9px; color: var(--dim);
+  text-transform: uppercase; letter-spacing: 0.08em;
+  margin-top: 6px;
+}
+.tl-next-row {
+  display: flex; align-items: center; gap: 7px;
+  padding: 0 14px 10px;
+  font-size: 11px; color: var(--dim);
+  border-top: 1px solid var(--border);
+  padding-top: 8px;
+}
+.tl-pulse-dot {
+  width: 5px; height: 5px; border-radius: 50%;
+  background: var(--green-lt); flex-shrink: 0;
+  animation: tl-blink 1.8s ease-in-out infinite;
+}
+@keyframes tl-blink {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.2; }
+}
+.tl-idle-preview {
+  padding: 10px 14px;
+  font-size: 12px; color: var(--muted);
+  text-align: center;
+  border-top: 1px solid var(--border);
+}
+
+/* ── Stats panel ─────────────────────────────────────────────────── */
+/* ── Collapsible section cards (Gallery + Stats) ─────────────── */
+.section-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  margin-top: 12px;
+  overflow: hidden;
+}
+
+.section-bar {
+  width: 100%; display: flex; align-items: center;
+  justify-content: center;
+  padding: 12px 16px;
+  background: var(--surface2);
+  border: none; border-bottom: 1px solid var(--border);
+  cursor: pointer; color: var(--text);
+  font-family: inherit; user-select: none;
+  position: relative;
+  transition: background 0.2s;
+}
+.section-bar:hover { background: rgba(255,255,255,0.04); }
+
+.section-bar-title {
+  font-size: 11.5px; font-weight: 600;
+  letter-spacing: 0.09em; text-transform: uppercase; color: var(--dim);
+}
+
+.section-bar-right {
+  position: absolute; right: 16px;
+  display: flex; align-items: center; gap: 9px;
+}
+
+.section-body {
+  padding: 16px;
+  overflow: hidden;
+  max-height: 3000px; opacity: 1;
+  transition: max-height 0.5s cubic-bezier(0.4,0,0.2,1),
+              opacity 0.3s ease,
+              padding-top 0.3s ease,
+              padding-bottom 0.3s ease;
+}
+.section-body.sec-closed {
+  max-height: 0 !important; opacity: 0 !important;
+  padding-top: 0 !important; padding-bottom: 0 !important;
+  pointer-events: none;
+}
+
+/* Circular gauges */
+.gauges-row {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.gauge-card {
+  display: flex; flex-direction: column; align-items: center;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 14px 6px 10px;
+  gap: 6px;
+}
+
+.gauge-svg {
+  width: 88px; height: 88px;
+  overflow: visible;
+}
+
+.gauge-track {
+  fill: none;
+  stroke: var(--border);
+  stroke-width: 6;
+}
+
+.gauge-arc {
+  fill: none;
+  stroke: var(--green-md);
+  stroke-width: 6;
+  stroke-linecap: round;
+  stroke-dasharray: 238.76;
+  stroke-dashoffset: 238.76;
+  transform-origin: 50px 50px;
+  transform: rotate(-90deg);
+  transition: stroke-dashoffset 0.55s cubic-bezier(.4,0,.2,1),
+              stroke 0.4s ease;
+}
+
+.gauge-val {
+  font-size: 19px; font-weight: 700;
+  fill: var(--text);
+  text-anchor: middle;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+
+.gauge-unit {
+  font-size: 10px; fill: var(--dim);
+  text-anchor: middle;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+
+.gauge-title {
+  font-size: 11px; font-weight: 600; letter-spacing: 0.07em;
+  color: var(--dim); text-transform: uppercase;
+}
+
+.gauge-sub {
+  font-size: 11px; color: var(--muted); letter-spacing: 0.01em;
+  margin-top: -2px;
+}
+
+.gauge-disk-chips {
+  display: flex; width: 100%;
+  border-top: 1px solid var(--border);
+  padding-top: 7px; margin-top: 0;
+}
+.gauge-disk-chip {
+  flex: 1; display: flex; flex-direction: column; align-items: center; gap: 3px;
+}
+.gauge-disk-lbl {
+  font-size: 9px; color: var(--dim);
+  text-transform: uppercase; letter-spacing: 0.07em;
+}
+.gauge-disk-val {
+  font-size: 11px; font-weight: 600; color: var(--muted);
+}
+
+/* Info chips row */
+.info-row {
+  display: flex; gap: 8px; flex-wrap: wrap;
+}
+
+.info-chip {
+  display: flex; flex-direction: column; align-items: center;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 14px;
+  flex: 1; min-width: 72px;
+}
+
+.info-chip-label {
+  font-size: 10px; color: var(--dim);
+  font-weight: 600; text-transform: uppercase; letter-spacing: 0.07em;
+  white-space: nowrap;
+}
+
+.info-chip-val {
+  font-size: 13px; font-weight: 600;
+  color: var(--text); margin-top: 4px;
+  white-space: nowrap;
+}
+
+/* WiFi card */
+.wifi-card {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 14px 9px;
+  display: flex; flex-direction: column; gap: 7px;
+  flex: 2; min-width: 210px;
+}
+.wifi-card-title {
+  font-size: 10px; font-weight: 600; letter-spacing: 0.07em;
+  text-transform: uppercase; color: var(--dim);
+}
+.wifi-traffic-row {
+  display: flex; align-items: center;
+}
+.wifi-traffic-item {
+  flex: 1; display: flex; flex-direction: column; gap: 2px;
+}
+.wifi-traffic-val {
+  font-size: 15px; font-weight: 700; color: var(--text); white-space: nowrap;
+}
+.wifi-traffic-lbl {
+  font-size: 10px; color: var(--muted);
+}
+.wifi-traffic-divider {
+  width: 1px; background: var(--border); align-self: stretch; margin: 0 14px;
+}
+.wifi-meta-row {
+  display: flex;
+  border-top: 1px solid var(--border);
+  padding-top: 7px;
+}
+.wifi-meta-item {
+  flex: 1; display: flex; flex-direction: column; gap: 2px;
+}
+.wifi-meta-lbl {
+  font-size: 9px; color: var(--dim);
+  text-transform: uppercase; letter-spacing: 0.07em;
+}
+.wifi-meta-val {
+  font-size: 11px; font-weight: 600; color: var(--muted);
+}
+
+@media (max-width: 600px) {
+  .gauges-row { grid-template-columns: repeat(2, 1fr); }
+}
+
+/* ── Toast ───────────────────────────────────────────────────────── */
+.toast {
+  position: fixed;
+  bottom: 24px; right: 24px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px 18px;
+  font-size: 13px; font-weight: 500;
+  color: var(--text);
+  box-shadow: 0 8px 24px rgba(0,0,0,0.6);
+  z-index: 200;
+  transform: translateY(80px); opacity: 0;
+  transition: transform 0.25s, opacity 0.25s;
+}
+.toast.show { transform: translateY(0); opacity: 1; }
+.toast.success { border-color: rgba(34,197,94,0.4); color: #bbf7d0; }
+.toast.error   { border-color: rgba(239,68,68,0.4); }
+
+/* ── Inline gallery ──────────────────────────────────────────────── */
+.gallery-count {
+  font-size: 12px; color: var(--dim); font-weight: 400;
+}
+
+.gallery-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 6px;
+}
+@media (min-width: 420px) {
+  .gallery-grid { grid-template-columns: repeat(3, 1fr); }
+}
+@media (min-width: 600px) {
+  .gallery-grid {
+    grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+    gap: 8px;
+  }
+}
+#gallery-grid {
+  max-height: 360px;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+}
+/* Aspect-ratio via padding-top — reliably enforced on all mobile browsers.
+   The image/video is absolutely positioned to fill the padding area. */
+.gallery-item {
+  border-radius: 7px; overflow: hidden;
+  background: var(--bg); text-decoration: none; display: block;
+  transition: transform 0.15s, box-shadow 0.15s, border-color 0.15s;
+  border: 1px solid var(--border);
+  position: relative;
+  padding-top: 75%; /* 3/4 = 75% → 4:3 ratio */
+  height: 0;
+}
+
+.gallery-del {
+  position: absolute; top: 5px; right: 5px; z-index: 10;
+  width: 22px; height: 22px;
+  background: rgba(0,0,0,0.65);
+  border: 1px solid rgba(255,255,255,0.15);
+  border-radius: 50%;
+  color: rgba(255,255,255,0.8);
+  font-size: 15px; line-height: 1;
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  opacity: 0;
+  transition: opacity 0.15s, background 0.15s, border-color 0.15s;
+  padding: 0;
+}
+.gallery-item:hover .gallery-del { opacity: 1; }
+.gallery-del:hover {
+  background: rgba(239,68,68,0.85);
+  border-color: rgba(239,68,68,0.5);
+  color: #fff;
+}
+.gallery-item:hover {
+  transform: scale(1.03);
+  box-shadow: 0 4px 16px rgba(0,0,0,0.6);
+  border-color: var(--green-md);
+}
+.gallery-item img {
+  position: absolute; top: 0; left: 0;
+  width: 100%; height: 100%; object-fit: cover; display: block;
+}
+
+.gallery-empty {
+  grid-column: 1/-1; text-align: center;
+  padding: 32px 0; color: var(--dim); font-size: 13px;
+}
+
+/* ── Video items in gallery ──────────────────────────────────────── */
+.video-item { padding-top: 56.25% !important; }  /* 9/16 = 56.25% → 16:9 */
+.video-item video {
+  position: absolute; top: 0; left: 0;
+  width: 100%; height: 100%; object-fit: cover; display: block;
+}
+.video-play {
+  position: absolute; inset: 0;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(0,0,0,0.3);
+  transition: background 0.15s;
+  pointer-events: none;
+}
+.gallery-item.video-item:hover .video-play { background: rgba(34,197,94,0.18); }
+.video-label {
+  position: absolute; top: 8px; left: 8px;
+  padding: 3px 9px;
+  background: rgba(0,0,0,0.55);
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 20px;
+  font-size: 10px; font-weight: 700; letter-spacing: 0.06em;
+  text-transform: uppercase; color: rgba(255,255,255,0.92);
+  pointer-events: none;
+}
+.video-size {
+  position: absolute; bottom: 7px; right: 8px;
+  font-size: 10px; color: rgba(255,255,255,0.6);
+  pointer-events: none;
+}
+.gallery-sub-label {
+  font-size: 11px; font-weight: 600; letter-spacing: 0.07em;
+  color: var(--dim); text-transform: uppercase;
+  margin: 16px 0 10px;
+  display: flex; align-items: center; gap: 6px;
+}
+.gallery-sub-label::before {
+  content: '';
+  display: inline-block; width: 6px; height: 8px;
+  background: var(--green-md);
+  clip-path: polygon(50% 0%, 100% 40%, 70% 100%, 30% 100%, 0% 40%);
+  opacity: 0.7; flex-shrink: 0;
+}
+
+/* ── Film emulation cards ────────────────────────────────────────── */
+.film-clear {
+  display: flex; align-items: center; justify-content: space-between;
+  width: 100%; padding: 12px 16px; margin-bottom: 10px;
+  background: var(--surface2); border: 1px solid var(--border);
+  border-radius: 10px; cursor: pointer; text-align: left;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.film-clear:hover  { border-color: rgba(34,197,94,0.4); }
+.film-clear.active { border-color: var(--green); box-shadow: 0 0 0 1px var(--green); }
+.film-clear-lbl { font-size: 13px; font-weight: 600; color: var(--text); }
+.film-clear-sub { font-size: 11px; color: var(--dim); }
+
+.film-grid {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 9px;
+}
+
+.film-card {
+  background: var(--surface2); border: 1px solid var(--border);
+  border-radius: 10px; overflow: hidden; cursor: pointer;
+  text-align: left; padding: 0;
+  display: flex; flex-direction: column;
+  transition: border-color 0.15s, box-shadow 0.15s, transform 0.1s;
+}
+.film-card:hover  { border-color: rgba(34,197,94,0.4); transform: translateY(-1px); }
+.film-card:active { transform: scale(0.97); }
+.film-card.active { border-color: var(--green); box-shadow: 0 0 0 1px var(--green); }
+
+.film-swatch {
+  height: 48px; width: 100%; flex-shrink: 0; display: block;
+}
+
+.film-body { padding: 9px 11px 11px; }
+
+.film-brand {
+  font-size: 9px; font-weight: 700;
+  letter-spacing: 0.09em; text-transform: uppercase; color: var(--dim);
+}
+.film-name {
+  font-size: 13px; font-weight: 600; color: var(--text);
+  margin-top: 2px; line-height: 1.2;
+}
+.film-tags {
+  font-size: 10.5px; color: var(--muted); margin-top: 4px;
+}
+
+/* ── Film strength slider (inside active card) ───────────────────── */
+.film-strength {
+  display: none;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+}
+.film-card.active .film-strength { display: block; }
+.film-strength-hdr {
+  display: flex; justify-content: space-between; align-items: center;
+  margin-bottom: 5px;
+}
+.film-strength-lbl {
+  font-size: 10px; font-weight: 700; letter-spacing: 0.07em;
+  text-transform: uppercase; color: var(--dim);
+}
+.film-strength-pct {
+  font-size: 11px; font-weight: 600; color: var(--green-lt);
+}
+
+/* ── Scrollbar ───────────────────────────────────────────────────── */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+@media (max-width: 520px) {
+  .stat-item { margin-right: 10px; padding-right: 10px; }
+  .frame-count { font-size: 26px; }
+  .tl-value-display { font-size: 18px; }
+}
+</style>
+</head>
+<body>
+<div class="container">
+
+  <!-- ── Header ── -->
+  <header>
+    <div class="header-brand">
+      <div class="cam-icon">
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke-linecap="round" stroke-linejoin="round">
+          <!-- stem -->
+          <path d="M12 22V12.5" stroke="#86efac" stroke-width="1.7"/>
+          <!-- left leaf with fill -->
+          <path d="M12 15.5C11 12 8 10 4 9c.5 5 4 8 8 6.5z" fill="rgba(134,239,172,0.22)" stroke="#86efac" stroke-width="1.5"/>
+          <!-- right leaf with fill -->
+          <path d="M12 12.5C13 9 16 7 20 6c-.5 5-4 8-8 6.5z" fill="rgba(134,239,172,0.22)" stroke="#86efac" stroke-width="1.5"/>
+          <!-- left vein -->
+          <path d="M12 15.5C10.5 13 8 12 5 11" stroke="#86efac" stroke-width="0.9" stroke-opacity="0.5"/>
+          <!-- right vein -->
+          <path d="M12 12.5C13.5 10.5 16 9.5 19 8" stroke="#86efac" stroke-width="0.9" stroke-opacity="0.5"/>
+          <!-- bud -->
+          <path d="M12 9.5C11 7.5 11.2 5.5 12 4c.8 1.5 1 3.5 0 5.5z" fill="rgba(134,239,172,0.35)" stroke="#86efac" stroke-width="1.4"/>
+        </svg>
+      </div>
+      <div style="display:flex;flex-direction:column;align-items:center">
+        <div class="header-title">Garden Monitor</div>
+        <div class="header-sub" id="camera-model">Loading&hellip;</div>
+        <div class="status-pill" id="status-pill">
+          <span class="dot" id="status-dot"></span>
+          <span id="status-text">Offline</span>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- ── Feed ── -->
+  <div class="feed-wrap">
+    <img id="stream-img" src="/stream" alt="Live feed" onload="onStreamLoad()" onerror="onStreamError()">
+    <div class="feed-overlay">
+      <span class="feed-label">Live feed</span>
+      <div style="position:relative">
+        <span class="res-badge" id="res-badge" onclick="toggleResDropdown()">
+          <span class="dot pulse" id="stream-dot"></span>
+          <span id="res-display">&mdash;</span>
+          <svg id="res-chevron" width="9" height="9" viewBox="0 0 10 6" fill="none" stroke="rgba(255,255,255,0.55)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 1 5 5 9 1"/></svg>
+        </span>
+        <div id="res-options" style="display:none">
+          <button class="res-dd-opt" data-res="640x480"   onclick="setRes(this)">640 &times; 480</button>
+          <button class="res-dd-opt" data-res="1280x720"  onclick="setRes(this)">1280 &times; 720</button>
+          <button class="res-dd-opt" data-res="1920x1080" onclick="setRes(this)">1920 &times; 1080</button>
+        </div>
+      </div>
+    </div>
+    <div class="feed-flip-btns">
+      <button class="flip-btn" id="feed-hflip-btn" onclick="toggleFeedFlip('hflip')">
+        <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="8" y1="2" x2="8" y2="14"/>
+          <polyline points="5 5 2 8 5 11"/>
+          <polyline points="11 5 14 8 11 11"/>
+        </svg>
+        H-Flip
+      </button>
+      <button class="flip-btn" id="feed-vflip-btn" onclick="toggleFeedFlip('vflip')">
+        <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="2" y1="8" x2="14" y2="8"/>
+          <polyline points="5 5 8 2 11 5"/>
+          <polyline points="5 11 8 14 11 11"/>
+        </svg>
+        V-Flip
+      </button>
+    </div>
+  </div>
+
+  <!-- ── Action buttons + all panels below live in .inner-content ── -->
+  <div class="inner-content">
+
+  <!-- Row 1: primary capture actions -->
+  <div class="live-actions" style="margin-bottom:8px">
+    <button class="btn btn-amber" id="snapshot-btn" onclick="toggleSnapPanel()">
+      <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="1" y="4" width="14" height="10" rx="2"/><circle cx="8" cy="9" r="2.5"/><path d="M5 4l1.5-2h3L11 4"/></svg>
+      Photo
+    </button>
+    <button class="btn btn-rec" id="record-btn" onclick="toggleRecPanel()">
+      <svg width="13" height="13" viewBox="0 0 16 16" fill="currentColor"><circle cx="8" cy="8" r="5"/></svg>
+      Record
+    </button>
+    <button class="btn btn-tl" id="tl-btn" onclick="toggleTLPanel()">
+      <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="8" cy="8" r="6"/><path d="M8 4v4l2.5 2.5"/></svg>
+      Timelapse
+    </button>
+  </div>
+
+  <!-- Row 2: filters + controls -->
+  <div class="live-actions" style="margin-bottom:12px">
+    <button class="btn btn-secondary" id="filter-btn" onclick="toggleFilterPanel()">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 1v4M12 19v4M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83M1 12h4M19 12h4M4.22 19.78l2.83-2.83M16.95 7.05l2.83-2.83"/></svg>
+      Filters
+    </button>
+    <button class="btn btn-secondary" id="ctrl-btn" onclick="toggleCtrlPanel()">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="5" r="1.5"/><line x1="12" y1="2" x2="12" y2="3.5"/><line x1="12" y1="6.5" x2="12" y2="22"/><circle cx="6" cy="12" r="1.5"/><line x1="6" y1="2" x2="6" y2="10.5"/><line x1="6" y1="13.5" x2="6" y2="22"/><circle cx="18" cy="17" r="1.5"/><line x1="18" y1="2" x2="18" y2="15.5"/><line x1="18" y1="18.5" x2="18" y2="22"/></svg>
+      Controls
+    </button>
+  </div>
+
+  <!-- ── Snapshot settings panel ── -->
+  <div id="snap-panel" class="tl-settings panel-closed">
+    <div class="section-label" style="margin-bottom:10px">Quality</div>
+    <div class="res-buttons" id="snap-quality-buttons">
+      <button class="res-opt active" data-q="95" onclick="setSnapQuality(this)">High</button>
+      <button class="res-opt"        data-q="85" onclick="setSnapQuality(this)">Standard</button>
+      <button class="res-opt"        data-q="70" onclick="setSnapQuality(this)">Web</button>
+    </div>
+    <hr class="tl-divider">
+    <button class="btn btn-amber" style="width:100%;justify-content:center" id="snap-take-btn" onclick="doTakeSnapshot()">
+      <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="1" y="4" width="14" height="10" rx="2"/><circle cx="8" cy="9" r="2.5"/><path d="M5 4l1.5-2h3L11 4"/></svg>
+      Take Photo
+    </button>
+  </div>
+
+  <!-- ── Recording settings panel ── -->
+  <div id="rec-panel" class="tl-settings panel-closed">
+    <div class="section-label" style="margin-bottom:10px">Resolution</div>
+    <div class="res-buttons" id="rec-res-buttons">
+      <button class="res-opt" data-res="640x480"   onclick="setRecRes(this)">640 &times; 480</button>
+      <button class="res-opt active" data-res="1280x720"  onclick="setRecRes(this)">1280 &times; 720</button>
+      <button class="res-opt" data-res="1920x1080" onclick="setRecRes(this)">1920 &times; 1080</button>
+    </div>
+    <hr class="tl-divider">
+    <div class="section-label" style="margin-bottom:10px">Quality</div>
+    <div class="res-buttons" id="rec-quality-buttons">
+      <button class="res-opt" data-crf="18" onclick="setRecQuality(this)">High</button>
+      <button class="res-opt active" data-crf="23" onclick="setRecQuality(this)">Medium</button>
+      <button class="res-opt" data-crf="28" onclick="setRecQuality(this)">Low</button>
+    </div>
+    <hr class="tl-divider">
+    <button class="btn btn-rec" style="width:100%;justify-content:center" id="rec-start-btn" onclick="startRecording()">
+      <svg width="13" height="13" viewBox="0 0 16 16" fill="currentColor"><circle cx="8" cy="8" r="5"/></svg>
+      Start Recording
+    </button>
+  </div>
+
+
+  <!-- ── Timelapse settings (shown when timelapse mode is active) ── -->
+  <div id="tl-panel" class="tl-settings panel-closed">
+
+    <!-- Interval -->
+    <div class="tl-header">
+      <span class="section-label" style="margin-bottom:0">Interval between shots</span>
+      <span class="tl-value-display" id="tl-interval-display">10s</span>
+    </div>
+    <div class="slider-wrap">
+      <input type="range" id="tl-interval-slider" min="0" max="7" step="1" value="2"
+             oninput="onIntervalInput(this.value)">
+    </div>
+    <div class="tl-presets">
+      <span class="tl-preset" onclick="setInterval_(0)">1s</span>
+      <span class="tl-preset" onclick="setInterval_(1)">5s</span>
+      <span class="tl-preset active" onclick="setInterval_(2)">10s</span>
+      <span class="tl-preset" onclick="setInterval_(3)">30s</span>
+      <span class="tl-preset" onclick="setInterval_(4)">1m</span>
+      <span class="tl-preset" onclick="setInterval_(5)">5m</span>
+      <span class="tl-preset" onclick="setInterval_(6)">15m</span>
+      <span class="tl-preset" onclick="setInterval_(7)">1h</span>
+    </div>
+
+    <hr class="tl-divider">
+
+    <!-- Duration -->
+    <div class="tl-header">
+      <span class="section-label" style="margin-bottom:0">Recording duration</span>
+      <span class="tl-value-display" id="tl-dur-display">1h</span>
+    </div>
+    <div class="slider-wrap">
+      <input type="range" id="tl-dur-slider" min="0" max="8" step="1" value="3"
+             oninput="onDurInput(this.value)">
+    </div>
+    <div class="tl-presets">
+      <span class="tl-preset" onclick="setDur(0)">5m</span>
+      <span class="tl-preset" onclick="setDur(1)">15m</span>
+      <span class="tl-preset" onclick="setDur(2)">30m</span>
+      <span class="tl-preset active" onclick="setDur(3)">1h</span>
+      <span class="tl-preset" onclick="setDur(4)">2h</span>
+      <span class="tl-preset" onclick="setDur(5)">4h</span>
+      <span class="tl-preset" onclick="setDur(6)">8h</span>
+      <span class="tl-preset" onclick="setDur(7)">24h</span>
+      <span class="tl-preset" onclick="setDur(8)">&#x221e;</span>
+    </div>
+
+    <hr class="tl-divider">
+
+    <!-- Timelapse status block -->
+    <div class="tl-status-block" id="tl-status-block">
+
+      <!-- Progress bar (finite duration only, shown when running) -->
+      <div class="tl-prog-track" id="tl-prog-track" style="display:none">
+        <div class="tl-prog-fill" id="tl-prog-fill"></div>
+      </div>
+
+      <!-- Elapsed | Remaining (shown when running) -->
+      <div class="tl-time-row" id="tl-time-row" style="display:none">
+        <div class="tl-time-col">
+          <div class="tl-time-val" id="tl-elapsed">0:00</div>
+          <div class="tl-time-lbl">elapsed</div>
+        </div>
+        <div class="tl-time-sep"></div>
+        <div class="tl-time-col" id="tl-rem-col">
+          <div class="tl-time-val tl-time-val--dim" id="tl-remaining">—</div>
+          <div class="tl-time-lbl">remaining</div>
+        </div>
+      </div>
+
+      <!-- Frame count + estimated video duration (always visible) -->
+      <div class="tl-capture-row">
+        <div class="tl-capture-col">
+          <span class="tl-frame-num" id="frame-count">—</span>
+          <span class="tl-frame-lbl" id="tl-frame-lbl">total frames</span>
+        </div>
+        <div class="tl-capture-sep"></div>
+        <div class="tl-capture-col">
+          <span class="tl-videst" id="tl-videst">—</span>
+          <span class="tl-videst-lbl" id="tl-videst-lbl">video length</span>
+        </div>
+      </div>
+
+      <!-- Next-shot countdown (shown when running) -->
+      <div class="tl-next-row" id="tl-next-row" style="display:none">
+        <span class="tl-pulse-dot"></span>
+        <span id="tl-next-txt">capturing…</span>
+      </div>
+
+    </div>
+
+    <hr class="tl-divider">
+    <button class="btn btn-tl" style="width:100%;justify-content:center" id="tl-start-btn" onclick="startStopTL()">
+      <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="8" cy="8" r="6"/><path d="M8 4v4l2.5 2.5"/></svg>
+      Start Timelapse
+    </button>
+
+  </div>
+
+  <!-- ── Film emulation panel ── -->
+  <div id="filter-panel" class="tl-settings panel-closed">
+    <div class="section-label">Film Emulation</div>
+
+    <div id="film-chips">
+
+      <!-- Clear / original -->
+      <button class="film-clear active" data-film="none" onclick="setFilm(this)">
+        <span class="film-clear-lbl">No Filter</span>
+        <span class="film-clear-sub">Original output</span>
+      </button>
+
+      <div class="film-grid">
+
+        <button class="film-card" data-film="portra" onclick="setFilm(this)">
+          <span class="film-swatch" style="background:linear-gradient(135deg,#5a2808 0%,#b86e30 45%,#e8c090 80%,#f4dfc0 100%)"></span>
+          <div class="film-body">
+            <div class="film-brand">Kodak</div>
+            <div class="film-name">Portra 400</div>
+            <div class="film-tags">Portrait · Warm</div>
+          </div>
+        </button>
+
+        <button class="film-card" data-film="velvia" onclick="setFilm(this)">
+          <span class="film-swatch" style="background:linear-gradient(135deg,#0a2810 0%,#166020 35%,#083860 65%,#1468a8 100%)"></span>
+          <div class="film-body">
+            <div class="film-brand">Fujifilm</div>
+            <div class="film-name">Velvia 50</div>
+            <div class="film-tags">Landscape · Vivid</div>
+          </div>
+        </button>
+
+        <button class="film-card" data-film="hp5" onclick="setFilm(this)">
+          <span class="film-swatch" style="background:linear-gradient(135deg,#0c0c0c 0%,#444 40%,#a0a0a0 70%,#e8e8e8 100%)"></span>
+          <div class="film-body">
+            <div class="film-brand">Ilford</div>
+            <div class="film-name">HP5</div>
+            <div class="film-tags">B&amp;W · Classic</div>
+          </div>
+        </button>
+
+        <button class="film-card" data-film="cinestill" onclick="setFilm(this)">
+          <span class="film-swatch" style="background:linear-gradient(135deg,#060e18 0%,#0e4860 35%,#1878a0 60%,#7a2010 100%)"></span>
+          <div class="film-body">
+            <div class="film-brand">Cinestill</div>
+            <div class="film-name">800T</div>
+            <div class="film-tags">Night · Cinematic</div>
+          </div>
+        </button>
+
+        <button class="film-card" data-film="trix" onclick="setFilm(this)">
+          <span class="film-swatch" style="background:linear-gradient(135deg,#000 0%,#080808 25%,#d0d0d0 75%,#fff 100%)"></span>
+          <div class="film-body">
+            <div class="film-brand">Kodak</div>
+            <div class="film-name">Tri-X 400</div>
+            <div class="film-tags">B&amp;W · Street</div>
+          </div>
+        </button>
+
+        <button class="film-card" data-film="provia" onclick="setFilm(this)">
+          <span class="film-swatch" style="background:linear-gradient(135deg,#0e1820 0%,#2c4868 40%,#608898 70%,#90b4c4 100%)"></span>
+          <div class="film-body">
+            <div class="film-brand">Fujifilm</div>
+            <div class="film-name">Provia 100F</div>
+            <div class="film-tags">Neutral · Accurate</div>
+          </div>
+        </button>
+
+        <button class="film-card" data-film="ektar" onclick="setFilm(this)">
+          <span class="film-swatch" style="background:linear-gradient(135deg,#500808 0%,#b01010 35%,#183818 65%,#289828 100%)"></span>
+          <div class="film-body">
+            <div class="film-brand">Kodak</div>
+            <div class="film-name">Ektar 100</div>
+            <div class="film-tags">Landscape · Saturated</div>
+          </div>
+        </button>
+
+        <button class="film-card" data-film="agfa" onclick="setFilm(this)">
+          <span class="film-swatch" style="background:linear-gradient(135deg,#1e1608 0%,#607020 35%,#c89040 65%,#e8c870 100%)"></span>
+          <div class="film-body">
+            <div class="film-brand">Agfa</div>
+            <div class="film-name">Vista 200</div>
+            <div class="film-tags">Vintage · Faded</div>
+          </div>
+        </button>
+
+      </div><!-- /film-grid -->
+    </div><!-- /film-chips -->
+
+    <div id="film-desc" style="margin-top:12px;font-size:12px;color:var(--muted);min-height:16px;line-height:1.5"></div>
+  </div>
+
+  <!-- ── Camera controls panel ── -->
+  <div id="ctrl-panel" class="tl-settings panel-closed">
+
+    <!-- ── PRE-CAPTURE (Picamera2 ISP) ── -->
+    <div class="section-label">Shutter &amp; Gain</div>
+
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+      <span style="font-size:12px;color:var(--muted)" id="shutter-mode-label">Shutter speed <span style="color:var(--dim)">(0 = auto)</span></span>
+      <span style="font-size:12px;color:var(--green-lt)" id="ctrl-val-exposure">Auto</span>
+    </div>
+    <div class="slider-wrap">
+      <input type="range" id="ctrl-sl-exposure" min="0" max="8" step="1" value="0"
+             oninput="onShutterSlider(this)">
+    </div>
+    <div class="tl-presets" id="shutter-presets">
+      <span class="tl-preset active" onclick="setShutterStep(0)">Auto</span>
+      <span class="tl-preset" onclick="setShutterStep(1)">1/2000</span>
+      <span class="tl-preset" onclick="setShutterStep(2)">1/500</span>
+      <span class="tl-preset" onclick="setShutterStep(3)">1/120</span>
+      <span class="tl-preset" onclick="setShutterStep(4)">1/60</span>
+      <span class="tl-preset" onclick="setShutterStep(5)">1/30</span>
+      <span class="tl-preset" onclick="setShutterStep(6)">1/15</span>
+      <span class="tl-preset" onclick="setShutterStep(7)">1/4</span>
+      <span class="tl-preset" onclick="setShutterStep(8)">1s</span>
+    </div>
+    <div style="display:flex;justify-content:flex-end;margin-top:0">
+      <button class="res-opt" id="shutter-angle-btn" onclick="toggleShutterMode()" style="font-size:11px;padding:3px 8px">° Shutter angle</button>
+    </div>
+
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-top:10px;margin-bottom:6px">
+      <span style="font-size:12px;color:var(--muted)">Analogue gain / ISO <span style="color:var(--dim)">(0 = auto)</span></span>
+      <span style="font-size:12px;color:var(--green-lt)" id="ctrl-val-gain">Auto</span>
+    </div>
+    <div class="slider-wrap">
+      <input type="range" id="ctrl-sl-gain" min="0" max="5" step="1" value="0"
+             oninput="onGainSlider(this)">
+    </div>
+    <div class="tl-presets" id="gain-presets">
+      <span class="tl-preset active" onclick="setGainStep(0)">Auto</span>
+      <span class="tl-preset" onclick="setGainStep(1)">×1</span>
+      <span class="tl-preset" onclick="setGainStep(2)">×2</span>
+      <span class="tl-preset" onclick="setGainStep(3)">×4</span>
+      <span class="tl-preset" onclick="setGainStep(4)">×8</span>
+      <span class="tl-preset" onclick="setGainStep(5)">×16</span>
+    </div>
+
+    <div class="section-label" style="margin-top:14px">White Balance</div>
+    <div class="res-buttons" id="ctrl-awb-btns">
+      <button class="res-opt active" data-awb="auto"        onclick="setCtrlAwb(this)">Auto</button>
+      <button class="res-opt"        data-awb="daylight"    onclick="setCtrlAwb(this)">Daylight</button>
+      <button class="res-opt"        data-awb="cloudy"      onclick="setCtrlAwb(this)">Cloudy</button>
+      <button class="res-opt"        data-awb="fluorescent" onclick="setCtrlAwb(this)">Fluorescent</button>
+      <button class="res-opt"        data-awb="indoor"      onclick="setCtrlAwb(this)">Indoor</button>
+      <button class="res-opt"        data-awb="tungsten"    onclick="setCtrlAwb(this)">Tungsten</button>
+    </div>
+
+    <!-- Kelvin slider — shown when any manual preset is active -->
+    <div id="ctrl-kelvin-row" style="display:none;margin-top:10px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+        <span style="font-size:12px;color:var(--muted)">Temperature</span>
+        <span style="font-size:12px;color:var(--green-lt)" id="ctrl-val-ktemp">5600 K</span>
+      </div>
+      <div class="ktemp-wrap slider-wrap">
+        <input type="range" id="ctrl-sl-ktemp" min="2000" max="7500" step="100" value="5600"
+               oninput="onKelvinSlider(this)">
+      </div>
+      <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--dim);margin-top:2px">
+        <span>◀ Warm 2000K</span><span>Cool 7500K ▶</span>
+      </div>
+    </div>
+
+    <!-- Colour tint — green to magenta (post-processing) -->
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-top:10px;margin-bottom:6px">
+      <span style="font-size:12px;color:var(--muted)">Colour tint</span>
+      <span style="font-size:12px;color:var(--green-lt)" id="ctrl-val-tint">Neutral</span>
+    </div>
+    <div class="slider-wrap tint-wrap">
+      <input type="range" id="ctrl-sl-tint" min="-100" max="100" step="1" value="0"
+             oninput="onCtrlSlider('tint', this, 'ctrl-val-tint', fmtTint)">
+    </div>
+    <div style="display:flex;justify-content:space-between;font-size:11px;margin-top:2px">
+      <span style="color:#22c55e">◀ Green</span><span style="color:#d946ef">Magenta ▶</span>
+    </div>
+
+    <hr class="tl-divider">
+
+    <!-- ── POST-CAPTURE (OpenCV) ── -->
+    <div class="section-label">Live Image Adjustments</div>
+
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+      <span style="font-size:12px;color:var(--muted)">Brightness</span>
+      <span style="font-size:12px;color:var(--green-lt)" id="ctrl-val-brightness">0</span>
+    </div>
+    <div class="slider-wrap">
+      <input type="range" id="ctrl-sl-brightness" min="-100" max="100" step="1" value="0"
+             oninput="onCtrlSlider('brightness', this, 'ctrl-val-brightness', v => (v > 0 ? '+' : '') + v)">
+    </div>
+
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-top:10px;margin-bottom:6px">
+      <span style="font-size:12px;color:var(--muted)">Saturation <span style="color:var(--dim)">(−100 = greyscale)</span></span>
+      <span style="font-size:12px;color:var(--green-lt)" id="ctrl-val-saturation">0</span>
+    </div>
+    <div class="slider-wrap">
+      <input type="range" id="ctrl-sl-saturation" min="-100" max="100" step="1" value="0"
+             oninput="onCtrlSlider('saturation', this, 'ctrl-val-saturation', v => (v > 0 ? '+' : '') + v)">
+    </div>
+
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-top:10px;margin-bottom:6px">
+      <span style="font-size:12px;color:var(--muted)">Sharpness <span style="color:var(--dim)">(default 1.0)</span></span>
+      <span style="font-size:12px;color:var(--green-lt)" id="ctrl-val-sharpness">1.0</span>
+    </div>
+    <div class="slider-wrap">
+      <input type="range" id="ctrl-sl-sharpness" min="0" max="4" step="0.1" value="1.0"
+             oninput="onCtrlSlider('sharpness', this, 'ctrl-val-sharpness', v => v.toFixed(1))">
+    </div>
+
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-top:10px;margin-bottom:6px">
+      <span style="font-size:12px;color:var(--muted)">Contrast <span style="color:var(--dim)">(default 1.0)</span></span>
+      <span style="font-size:12px;color:var(--green-lt)" id="ctrl-val-contrast">1.0</span>
+    </div>
+    <div class="slider-wrap">
+      <input type="range" id="ctrl-sl-contrast" min="0" max="4" step="0.05" value="1.0"
+             oninput="onCtrlSlider('contrast', this, 'ctrl-val-contrast', v => v.toFixed(2))">
+    </div>
+
+    <div class="section-label" style="margin-top:14px">Noise Reduction</div>
+    <div class="res-buttons" id="ctrl-nr-btns">
+      <button class="res-opt"        data-nr="off"          onclick="setCtrlNR(this)">Off</button>
+      <button class="res-opt active" data-nr="fast"         onclick="setCtrlNR(this)">Fast</button>
+      <button class="res-opt"        data-nr="high_quality" onclick="setCtrlNR(this)">High Quality</button>
+    </div>
+
+    <hr class="tl-divider">
+    <button class="btn btn-secondary" style="width:100%;justify-content:center" onclick="resetCtrlDefaults()">
+      ↺ Reset all controls to defaults
+    </button>
+
+  </div>
+
+  <!-- ── Gallery ── -->
+  <div class="section-card">
+    <button class="section-bar" onclick="toggleSection('gallery')">
+      <span class="section-bar-title">Gallery</span>
+      <div class="section-bar-right">
+        <span class="gallery-count" id="gallery-count"></span>
+        <svg id="gallery-chevron" width="10" height="6" viewBox="0 0 10 6" fill="none"
+             stroke="rgba(255,255,255,0.45)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"
+             style="transform:rotate(180deg);transition:transform 0.35s cubic-bezier(0.4,0,0.2,1);flex-shrink:0">
+          <polyline points="1 1 5 5 9 1"/>
+        </svg>
+      </div>
+    </button>
+    <div class="section-body" id="gallery-body">
+      <div class="gallery-grid" id="gallery-grid">
+        <div class="gallery-empty">No snapshots yet</div>
+      </div>
+      <div id="video-section" style="display:none">
+        <div class="gallery-sub-label">
+          Videos
+          <span class="gallery-count" id="video-count" style="text-transform:none;letter-spacing:0;font-weight:400"></span>
+        </div>
+        <div class="gallery-grid" id="video-grid"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── System Stats ── -->
+  <div class="section-card">
+    <button class="section-bar" onclick="toggleSection('stats')">
+      <span class="section-bar-title">System Stats</span>
+      <div class="section-bar-right">
+        <svg id="stats-chevron" width="10" height="6" viewBox="0 0 10 6" fill="none"
+             stroke="rgba(255,255,255,0.45)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"
+             style="transform:rotate(180deg);transition:transform 0.35s cubic-bezier(0.4,0,0.2,1);flex-shrink:0">
+          <polyline points="1 1 5 5 9 1"/>
+        </svg>
+      </div>
+    </button>
+    <div class="section-body" id="stats-body">
+      <div class="gauges-row">
+        <div class="gauge-card">
+          <svg class="gauge-svg" viewBox="0 0 100 100">
+            <circle class="gauge-track" cx="50" cy="50" r="38"/>
+            <circle class="gauge-arc" id="arc-cpu" cx="50" cy="50" r="38"/>
+            <text class="gauge-val" id="gv-cpu" x="50" y="47">0</text>
+            <text class="gauge-unit" x="50" y="60">%</text>
+          </svg>
+          <span class="gauge-title">CPU</span>
+        </div>
+        <div class="gauge-card">
+          <svg class="gauge-svg" viewBox="0 0 100 100">
+            <circle class="gauge-track" cx="50" cy="50" r="38"/>
+            <circle class="gauge-arc" id="arc-ram" cx="50" cy="50" r="38"/>
+            <text class="gauge-val" id="gv-ram" x="50" y="47">0</text>
+            <text class="gauge-unit" x="50" y="60">%</text>
+          </svg>
+          <span class="gauge-title">RAM</span>
+          <span class="gauge-sub" id="ic-ram-usage">— / —</span>
+        </div>
+        <div class="gauge-card">
+          <svg class="gauge-svg" viewBox="0 0 100 100">
+            <circle class="gauge-track" cx="50" cy="50" r="38"/>
+            <circle class="gauge-arc" id="arc-temp" cx="50" cy="50" r="38"/>
+            <text class="gauge-val" id="gv-temp" x="50" y="47">&mdash;</text>
+            <text class="gauge-unit" x="50" y="60">&deg;C</text>
+          </svg>
+          <span class="gauge-title">Temp</span>
+        </div>
+        <div class="gauge-card">
+          <svg class="gauge-svg" viewBox="0 0 100 100">
+            <circle class="gauge-track" cx="50" cy="50" r="38"/>
+            <circle class="gauge-arc" id="arc-disk" cx="50" cy="50" r="38"/>
+            <text class="gauge-val" id="gv-disk" x="50" y="47">0</text>
+            <text class="gauge-unit" x="50" y="60">%</text>
+          </svg>
+          <span class="gauge-title">Disk</span>
+          <div class="gauge-disk-chips">
+            <div class="gauge-disk-chip">
+              <span class="gauge-disk-lbl">Used</span>
+              <span class="gauge-disk-val" id="ic-disk-used">—</span>
+            </div>
+            <div class="gauge-disk-chip">
+              <span class="gauge-disk-lbl">Free</span>
+              <span class="gauge-disk-val" id="ic-disk-free">—</span>
+            </div>
+            <div class="gauge-disk-chip">
+              <span class="gauge-disk-lbl">Total</span>
+              <span class="gauge-disk-val" id="ic-disk-total">—</span>
+            </div>
+          </div>
+        </div>
+      </div><!-- /gauges-row -->
+      <div class="info-row">
+        <div class="info-chip">
+          <span class="info-chip-label">FPS</span>
+          <span class="info-chip-val" id="ic-fps">&mdash;</span>
+        </div>
+        <div class="wifi-card">
+          <span class="wifi-card-title">WiFi Traffic</span>
+          <div class="wifi-traffic-row">
+            <div class="wifi-traffic-item">
+              <span class="wifi-traffic-val" id="ic-recv">&mdash;</span>
+              <span class="wifi-traffic-lbl">&#x2193; Download</span>
+            </div>
+            <div class="wifi-traffic-divider"></div>
+            <div class="wifi-traffic-item">
+              <span class="wifi-traffic-val" id="ic-send">&mdash;</span>
+              <span class="wifi-traffic-lbl">&#x2191; Upload</span>
+            </div>
+          </div>
+          <div class="wifi-meta-row">
+            <div class="wifi-meta-item">
+              <span class="wifi-meta-lbl">Link Speed</span>
+              <span class="wifi-meta-val" id="ic-wifi-rate">&mdash;</span>
+            </div>
+            <div class="wifi-meta-item">
+              <span class="wifi-meta-lbl">Signal</span>
+              <span class="wifi-meta-val" id="ic-wifi-signal">&mdash;</span>
+            </div>
+          </div>
+        </div>
+        <div class="info-chip">
+          <span class="info-chip-label">Uptime</span>
+          <span class="info-chip-val" id="ic-uptime">&mdash;</span>
+        </div>
+        <div class="info-chip">
+          <span class="info-chip-label">Camera</span>
+          <span class="info-chip-val" id="ic-cam">&mdash;</span>
+        </div>
+        <div class="info-chip" style="flex:2; min-width:120px">
+          <span class="info-chip-label">Pi Model</span>
+          <span class="info-chip-val" id="ic-pi">&mdash;</span>
+        </div>
+      </div><!-- /info-row -->
+    </div><!-- /stats section-body -->
+  </div>
+
+  </div><!-- /inner-content -->
+
+</div><!-- /container -->
+
+<!-- ── Toast ── -->
+<div class="toast" id="toast"></div>
+
+<script>
+// ── State ──────────────────────────────────────────────────────────────────────
+let   tlRunning      = false;
+let   tlPollTimer    = null;
+let   tlClockTimer   = null;   // 1-second tick for elapsed/remaining display
+let   tlStart_       = null;
+let   tlInterval_    = 0;      // active interval in seconds
+let   tlDuration_    = 0;      // active duration in seconds (0 = unlimited)
+let   tlNextFrameAt_ = null;   // estimated epoch ms of next frame
+let   _tlPollMs      = 1000;   // adaptive: 1 s (fast interval) → 30 s (slow interval)
+let   statsTimer   = null;
+let   reconnTimer  = null;
+let   streamOnline = false;
+let   currentRes   = '1280x720';
+let   recording    = false;
+let   recordTimer  = null;
+let   recordStart  = null;
+let   tlPanelOpen   = false;
+let   recPanelOpen  = false;
+let   snapPanelOpen = false;
+let   ctrlPanelOpen   = false;
+let   filterPanelOpen = false;
+let   resDDOpen    = false;
+let   recCrf       = 23;
+let   recTargetRes = '1280x720';
+let   snapFilter   = 'none';
+let   snapQuality  = 95;
+
+// Timelapse presets
+const TL_INTERVAL_S    = [1, 5, 10, 30, 60, 300, 900, 3600];
+const TL_INTERVAL_LBLS = ['1s','5s','10s','30s','1m','5m','15m','1h'];
+const TL_DUR_S         = [300, 900, 1800, 3600, 7200, 14400, 28800, 86400, 0];
+const TL_DUR_LBLS      = ['5m','15m','30m','1h','2h','4h','8h','24h','\u221e'];
+
+// ── Init ───────────────────────────────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', async () => {
+  loadInfo();
+  startStats();
+  loadGallery();
+  loadVideos();
+
+  // Restore timelapse state so any device sees the same running session
+  try {
+    const r = await fetch('/api/timelapse/status');
+    const d = await r.json();
+    if (d.running) {
+      tlRunning      = true;
+      tlInterval_    = d.interval;
+      tlDuration_    = d.duration;
+      tlStart_       = Date.now() - (d.elapsed * 1000);
+      tlNextFrameAt_ = tlStart_ + d.count * d.interval * 1000;
+
+      // Restore slider positions to match the running session
+      const iIdx = TL_INTERVAL_S.findIndex(v => v === d.interval);
+      if (iIdx >= 0) setInterval_(iIdx);
+      const dIdx = TL_DUR_S.findIndex(v => v === d.duration);
+      if (dIdx >= 0) setDur(dIdx);
+
+      // Open the panel immediately showing live status
+      tlPanelOpen = true;
+      document.getElementById('tl-panel').classList.remove('panel-closed');
+      document.getElementById('tl-interval-slider').disabled = true;
+      document.getElementById('tl-dur-slider').disabled = true;
+      document.getElementById('tl-btn').className = 'btn btn-tl active';
+      document.getElementById('frame-count').textContent = String(d.count).padStart(4, '0');
+      if (d.duration > 0) {
+        const projFrames = Math.floor(d.duration / d.interval);
+        document.getElementById('tl-videst').textContent = '~' + fmtVideoLen(projFrames / 24);
+      } else {
+        const fph = Math.floor(3600 / d.interval);
+        document.getElementById('tl-videst').textContent = '~' + fmtVideoLen(fph / 24) + '/hr';
+      }
+      const startBtn = document.getElementById('tl-start-btn');
+      startBtn.className = 'btn btn-danger';
+      startBtn.style.cssText = 'width:100%;justify-content:center';
+      startBtn.innerHTML = '<svg width="10" height="10" viewBox="0 0 16 16" fill="currentColor"><rect x="3" y="3" width="10" height="10" rx="1"/></svg> Stop Timelapse';
+      _showTLRunning(d.duration > 0);
+      _tlPollMs    = Math.max(1000, Math.min(30000, d.interval * 250));
+      tlPollTimer  = setInterval(pollTL, _tlPollMs);
+      tlClockTimer = setInterval(_tlClockTick, 1000);
+    } else {
+      _showTLIdle();
+    }
+  } catch (_) { _showTLIdle(); }
+
+  // Restore recording state
+  try {
+    const r = await fetch('/api/record/status');
+    const d = await r.json();
+    if (d.running) {
+      recording = true;
+      recordStart = Date.now() - (d.duration * 1000);
+      const btn = document.getElementById('record-btn');
+      btn.className = 'btn btn-rec recording';
+      recordTimer = setInterval(() => {
+        const s  = Math.floor((Date.now() - recordStart) / 1000);
+        const mm = String(Math.floor(s / 60)).padStart(2, '0');
+        const ss = String(s % 60).padStart(2, '0');
+        btn.innerHTML = '<svg width="10" height="10" viewBox="0 0 16 16" fill="currentColor"><rect x="3" y="3" width="10" height="10" rx="1"/></svg> ' + mm + ':' + ss;
+      }, 500);
+    }
+  } catch (_) {}
+});
+
+// ── Camera info ────────────────────────────────────────────────────────────────
+const MODEL_NAMES = {
+  'OV5647': 'SainSmart OV5647 Wide Angle',
+  'IMX219': 'Raspberry Pi Camera v2',
+  'IMX477': 'Raspberry Pi HQ Camera',
+  'IMX708': 'Raspberry Pi Camera v3',
+};
+
+// Stored once from /api/info for use in stats chips
+let piModel = '—';
+let camModel = '—';
+
+function shortPiModel(m) {
+  // "Raspberry Pi 4 Model B Rev 1.4" → "Pi 4B"
+  const match = m.match(/Pi\s+(\d+)\s+Model\s+([A-Z]+)/i);
+  if (match) return 'Pi ' + match[1] + match[2];
+  const z = m.match(/Pi\s+Zero\s*(\w*)/i);
+  if (z) return 'Pi Zero' + (z[1] ? ' ' + z[1] : '');
+  return m.replace('Raspberry ', '').split(' Rev')[0].trim();
+}
+
+async function loadInfo() {
+  try {
+    const r = await fetch('/api/info');
+    const d = await r.json();
+    const model = (d.camera || '').toUpperCase();
+    camModel = MODEL_NAMES[model] || d.camera || '?';
+    document.getElementById('camera-model').textContent = camModel;
+    setResDisplay(d.resolution || '1280x720');
+    if (d.model) {
+      piModel = shortPiModel(d.model);
+      document.getElementById('ic-pi').textContent = piModel;
+    }
+    document.getElementById('ic-cam').textContent = d.camera || '?';
+  } catch (_) {}
+}
+
+function setResDisplay(res) {
+  currentRes = res;
+  document.getElementById('res-display').textContent = res.replace('x', ' \u00d7 ');
+  updateResHighlight();
+}
+
+function updateResHighlight() {
+  document.querySelectorAll('#res-options .res-dd-opt').forEach(b => {
+    b.classList.toggle('active', b.dataset.res === currentRes);
+  });
+}
+
+function toggleResDropdown() {
+  resDDOpen ? closeResDropdown() : openResDropdown();
+}
+
+function openResDropdown() {
+  resDDOpen = true;
+  document.getElementById('res-options').style.display = 'block';
+  document.getElementById('res-badge').classList.add('open');
+}
+
+function closeResDropdown() {
+  resDDOpen = false;
+  document.getElementById('res-options').style.display = 'none';
+  document.getElementById('res-badge').classList.remove('open');
+}
+
+document.addEventListener('click', function(e) {
+  if (resDDOpen && !document.getElementById('res-badge').contains(e.target)) {
+    closeResDropdown();
+  }
+});
+
+// ── Stream ─────────────────────────────────────────────────────────────────────
+function onStreamLoad() {
+  if (!streamOnline) {
+    streamOnline = true;
+    clearTimeout(reconnTimer);
+    setStatus(true);
+  }
+}
+
+function onStreamError() {
+  streamOnline = false;
+  setStatus(false);
+  reconnTimer = setTimeout(reconnect, 4000);
+}
+
+function reconnect() {
+  document.getElementById('stream-img').src = '/stream?' + Date.now();
+}
+
+function setStatus(online) {
+  document.getElementById('status-dot').className  = 'dot' + (online ? ' online' : '');
+  document.getElementById('stream-dot').className  = 'dot pulse' + (online ? ' online' : '');
+  document.getElementById('status-text').textContent = online ? 'Online' : 'Offline';
+  document.getElementById('status-pill').classList.toggle('online', online);
+}
+
+// ── Resolution ─────────────────────────────────────────────────────────────────
+async function setRes(btn) {
+  const res = btn.dataset.res;
+  if (res === currentRes) return;
+  btn.disabled = true;
+  try {
+    const r = await fetch('/api/resolution', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({resolution: res}),
+    });
+    const d = await r.json();
+    if (d.ok) {
+      setResDisplay(d.resolution);
+      closeResDropdown();
+      toast('Resolution changed to ' + d.resolution.replace('x', ' \u00d7 '), 'success');
+    } else {
+      toast('Resolution change failed', 'error');
+    }
+  } catch (_) {
+    toast('Request failed', 'error');
+  }
+  btn.disabled = false;
+}
+
+// ── Solo-mode helper ────────────────────────────────────────────────────────────
+function closeOtherPanels(keep) {
+  if (keep !== 'snap-panel') {
+    snapPanelOpen = false;
+    document.getElementById('snap-panel').classList.add('panel-closed');
+  }
+  if (keep !== 'rec-panel') {
+    recPanelOpen = false;
+    document.getElementById('rec-panel').classList.add('panel-closed');
+  }
+  if (keep !== 'tl-panel') {
+    tlPanelOpen = false;
+    if (!tlRunning) document.getElementById('tl-btn').classList.remove('active');
+    document.getElementById('tl-panel').classList.add('panel-closed');
+  }
+  if (keep !== 'ctrl-panel') {
+    ctrlPanelOpen = false;
+    document.getElementById('ctrl-panel').classList.add('panel-closed');
+    document.getElementById('ctrl-btn').classList.remove('active');
+  }
+  if (keep !== 'filter-panel') {
+    filterPanelOpen = false;
+    document.getElementById('filter-panel').classList.add('panel-closed');
+    document.getElementById('filter-btn').classList.remove('active');
+  }
+}
+
+// ── Section cards (Gallery / Stats) ────────────────────────────────────────────
+const _secOpen = { gallery: true, stats: true };
+function toggleSection(id) {
+  const body    = document.getElementById(id + '-body');
+  const chevron = document.getElementById(id + '-chevron');
+  _secOpen[id]  = !_secOpen[id];
+  body.classList.toggle('sec-closed', !_secOpen[id]);
+  chevron.style.transform = _secOpen[id] ? 'rotate(180deg)' : 'rotate(0deg)';
+}
+
+// ── Snapshot panel ─────────────────────────────────────────────────────────────
+function toggleSnapPanel() {
+  if (snapPanelOpen) {
+    snapPanelOpen = false;
+    document.getElementById('snap-panel').classList.add('panel-closed');
+  } else {
+    closeOtherPanels('snap-panel');
+    snapPanelOpen = true;
+    document.getElementById('snap-panel').classList.remove('panel-closed');
+  }
+}
+
+function setSnapFilter(btn) {
+  document.querySelectorAll('#snap-filter-buttons .res-opt').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  snapFilter = btn.dataset.filter;
+}
+
+function setSnapQuality(btn) {
+  document.querySelectorAll('#snap-quality-buttons .res-opt').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  snapQuality = parseInt(btn.dataset.q, 10);
+}
+
+async function doTakeSnapshot() {
+  const btn = document.getElementById('snap-take-btn');
+  btn.disabled = true;
+  btn.innerHTML = `<svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="1" y="4" width="14" height="10" rx="2"/><circle cx="8" cy="9" r="2.5"/><path d="M5 4l1.5-2h3L11 4"/></svg> Capturing\u2026`;
+  try {
+    const r = await fetch('/api/snapshot', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({filter: snapFilter, quality: snapQuality}),
+    });
+    const d = await r.json();
+    if (d.ok) {
+      toast('\u2713 Snapshot saved', 'success');
+      loadGallery();
+    } else {
+      toast('Snapshot failed', 'error');
+    }
+  } catch (_) {
+    toast('Request failed', 'error');
+  }
+  btn.disabled = false;
+  btn.innerHTML = `<svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="1" y="4" width="14" height="10" rx="2"/><circle cx="8" cy="9" r="2.5"/><path d="M5 4l1.5-2h3L11 4"/></svg> Take Photo`;
+}
+
+// ── Videos gallery ─────────────────────────────────────────────────────────────
+async function loadVideos() {
+  const section = document.getElementById('video-section');
+  const grid    = document.getElementById('video-grid');
+  const count   = document.getElementById('video-count');
+  try {
+    const r = await fetch('/api/videos');
+    const files = await r.json();
+    _videoCount = files.length;
+    updateGalleryBarCount();
+    if (files.length === 0) { section.style.display = 'none'; return; }
+    section.style.display = '';
+    count.textContent = '— ' + files.length + ' video' + (files.length !== 1 ? 's' : '');
+    grid.innerHTML = '';
+    files.forEach(f => {
+      const a = document.createElement('a');
+      a.className = 'gallery-item video-item';
+      a.href = '/videos/' + f.filename;
+      a.target = '_blank';
+      a.title = f.filename;
+
+      const vid = document.createElement('video');
+      vid.src = '/videos/' + f.filename;
+      vid.preload = 'metadata';
+      vid.muted = true;
+      a.appendChild(vid);
+
+      const play = document.createElement('div');
+      play.className = 'video-play';
+      play.innerHTML = '<svg width="30" height="30" viewBox="0 0 24 24" fill="rgba(255,255,255,0.9)"><path d="M8 5v14l11-7z"/></svg>';
+      a.appendChild(play);
+
+      const isTimelapse = f.filename.toLowerCase().startsWith('timelapse');
+      const sz = f.size > 1048576 ? (f.size/1048576).toFixed(1)+' MB' : (f.size/1024).toFixed(0)+' KB';
+
+      const lbl = document.createElement('div');
+      lbl.className = 'video-label';
+      lbl.textContent = isTimelapse ? 'Timelapse' : 'Video';
+      a.appendChild(lbl);
+
+      const sizeEl = document.createElement('div');
+      sizeEl.className = 'video-size';
+      sizeEl.textContent = sz;
+      a.appendChild(sizeEl);
+
+      grid.appendChild(a);
+    });
+  } catch (_) {}
+}
+
+// ── Inline gallery ─────────────────────────────────────────────────────────────
+let _photoCount = 0, _videoCount = 0;
+function updateGalleryBarCount() {
+  const parts = [];
+  if (_photoCount > 0) parts.push(_photoCount + ' photo' + (_photoCount !== 1 ? 's' : ''));
+  if (_videoCount > 0) parts.push(_videoCount + ' video' + (_videoCount !== 1 ? 's' : ''));
+  document.getElementById('gallery-count').textContent = parts.join(' · ');
+}
+
+async function loadGallery() {
+  const grid  = document.getElementById('gallery-grid');
+  try {
+    const r = await fetch('/api/gallery');
+    const files = await r.json();
+    _photoCount = files.length;
+    updateGalleryBarCount();
+    if (files.length === 0) {
+      grid.innerHTML = '<div class="gallery-empty">No snapshots yet</div>';
+    } else {
+      grid.innerHTML = '';
+      files.forEach(f => {
+        const a = document.createElement('a');
+        a.className = 'gallery-item';
+        a.href = '/snapshots/' + f.filename;
+        a.target = '_blank';
+        a.title = f.filename;
+        const img = document.createElement('img');
+        img.src = '/snapshots/' + f.filename;
+        img.loading = 'lazy';
+        a.appendChild(img);
+
+        const del = document.createElement('button');
+        del.className = 'gallery-del';
+        del.title = 'Delete';
+        del.innerHTML = '&times;';
+        del.onclick = e => deleteSnapshot(f.filename, e);
+        a.appendChild(del);
+
+        grid.appendChild(a);
+      });
+    }
+  } catch (_) {}
+}
+
+async function deleteSnapshot(filename, e) {
+  e.preventDefault();
+  e.stopPropagation();
+  try {
+    const r = await fetch('/api/snapshot/' + encodeURIComponent(filename), {method: 'DELETE'});
+    const d = await r.json();
+    if (d.ok) { loadGallery(); toast('Photo deleted', ''); }
+    else       { toast('Delete failed', 'error'); }
+  } catch (_) { toast('Delete failed', 'error'); }
+}
+
+// ── Record panel ───────────────────────────────────────────────────────────────
+function toggleRecPanel() {
+  if (recording) { stopRecording(); return; }
+  if (recPanelOpen) {
+    recPanelOpen = false;
+    document.getElementById('rec-panel').classList.add('panel-closed');
+  } else {
+    closeOtherPanels('rec-panel');
+    recPanelOpen = true;
+    document.getElementById('rec-panel').classList.remove('panel-closed');
+  }
+}
+
+function setRecRes(btn) {
+  document.querySelectorAll('#rec-res-buttons .res-opt').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  recTargetRes = btn.dataset.res;
+}
+
+function setRecQuality(btn) {
+  document.querySelectorAll('#rec-quality-buttons .res-opt').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  recCrf = parseInt(btn.dataset.crf, 10);
+}
+
+async function startRecording() {
+  // Switch camera resolution if a different one was chosen
+  if (recTargetRes && recTargetRes !== currentRes) {
+    const r = await fetch('/api/resolution', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({resolution: recTargetRes}),
+    });
+    const d = await r.json();
+    if (d.ok) { currentRes = recTargetRes; updateResHighlight(); }
+  }
+  await fetch('/api/record/start', {
+    method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({quality: recCrf}),
+  });
+  recording = true;
+  recordStart = Date.now();
+  recPanelOpen = false;
+  document.getElementById('rec-panel').classList.add('panel-closed');
+  const btn = document.getElementById('record-btn');
+  btn.className = 'btn btn-rec recording';
+  recordTimer = setInterval(() => {
+    const s  = Math.floor((Date.now() - recordStart) / 1000);
+    const mm = String(Math.floor(s / 60)).padStart(2, '0');
+    const ss = String(s % 60).padStart(2, '0');
+    btn.innerHTML = '<svg width="10" height="10" viewBox="0 0 16 16" fill="currentColor"><rect x="3" y="3" width="10" height="10" rx="1"/></svg> ' + mm + ':' + ss;
+  }, 500);
+}
+
+async function stopRecording() {
+  const r = await fetch('/api/record/stop', {method: 'POST'});
+  const d = await r.json();
+  recording = false;
+  clearInterval(recordTimer);
+  const btn = document.getElementById('record-btn');
+  btn.className = 'btn btn-rec';
+  btn.innerHTML = '<svg width="13" height="13" viewBox="0 0 16 16" fill="currentColor"><circle cx="8" cy="8" r="5"/></svg> Record';
+  if (d.filename) toast('\u2713 Recording saved \u2014 converting\u2026', 'success');
+  setTimeout(loadVideos, 4000);
+}
+
+// ── Timelapse interval slider ──────────────────────────────────────────────────
+function onIntervalInput(idx) { setInterval_(parseInt(idx, 10)); }
+
+function setInterval_(idx) {
+  document.getElementById('tl-interval-slider').value = idx;
+  document.getElementById('tl-interval-display').textContent = TL_INTERVAL_LBLS[idx];
+  document.querySelectorAll('.tl-settings .tl-presets')[0]
+    .querySelectorAll('.tl-preset').forEach((el, i) => el.classList.toggle('active', i === idx));
+  if (!tlRunning) updateTLPreview();
+}
+
+// ── Timelapse duration slider ──────────────────────────────────────────────────
+function onDurInput(idx) { setDur(parseInt(idx, 10)); }
+
+function setDur(idx) {
+  document.getElementById('tl-dur-slider').value = idx;
+  document.getElementById('tl-dur-display').textContent = TL_DUR_LBLS[idx];
+  document.querySelectorAll('.tl-settings .tl-presets')[1]
+    .querySelectorAll('.tl-preset').forEach((el, i) => el.classList.toggle('active', i === idx));
+  if (!tlRunning) updateTLPreview();
+}
+
+// ── Timelapse panel ────────────────────────────────────────────────────────────
+function toggleTLPanel() {
+  if (tlRunning) { stopTL(); return; }
+  if (tlPanelOpen) {
+    tlPanelOpen = false;
+    document.getElementById('tl-panel').classList.add('panel-closed');
+    document.getElementById('tl-btn').classList.remove('active');
+  } else {
+    closeOtherPanels('tl-panel');
+    tlPanelOpen = true;
+    document.getElementById('tl-panel').classList.remove('panel-closed');
+    document.getElementById('tl-btn').classList.add('active');
+  }
+}
+
+async function startStopTL() {
+  if (tlRunning) { stopTL(); } else { await startTL(); }
+}
+
+async function startTL() {
+  const iSlider  = document.getElementById('tl-interval-slider');
+  const dSlider  = document.getElementById('tl-dur-slider');
+  const interval = TL_INTERVAL_S[parseInt(iSlider.value, 10)];
+  const duration = TL_DUR_S[parseInt(dSlider.value, 10)];
+  await fetch('/api/timelapse/start', {
+    method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({interval, duration}),
+  });
+  tlRunning      = true;
+  tlStart_       = Date.now();
+  tlInterval_    = interval;
+  tlDuration_    = duration;
+  tlNextFrameAt_ = Date.now() + interval * 1000;
+  // Adaptive poll: 1 s for fast intervals, up to 30 s for slow ones
+  _tlPollMs = Math.max(1000, Math.min(30000, interval * 250));
+  iSlider.disabled = true;
+  dSlider.disabled = true;
+  document.getElementById('tl-btn').className = 'btn btn-tl active';
+  const startBtn = document.getElementById('tl-start-btn');
+  startBtn.className = 'btn btn-danger';
+  startBtn.style.cssText = 'width:100%;justify-content:center';
+  startBtn.innerHTML = '<svg width="10" height="10" viewBox="0 0 16 16" fill="currentColor"><rect x="3" y="3" width="10" height="10" rx="1"/></svg> Stop Timelapse';
+  _showTLRunning(duration > 0);
+  tlPollTimer  = setInterval(pollTL, _tlPollMs);
+  tlClockTimer = setInterval(_tlClockTick, 1000);
+}
+
+async function stopTL() {
+  await fetch('/api/timelapse/stop', {method: 'POST'});
+  _tlStopped();
+  toast('Timelapse stopped', '');
+}
+
+function _tlStopped() {
+  tlRunning      = false;
+  tlNextFrameAt_ = null;
+  clearInterval(tlPollTimer);
+  clearInterval(tlClockTimer);
+  tlStart_    = null;
+  tlInterval_ = 0;
+  tlDuration_ = 0;
+  document.getElementById('tl-interval-slider').disabled = false;
+  document.getElementById('tl-dur-slider').disabled = false;
+  document.getElementById('tl-btn').className = 'btn btn-tl';
+  const startBtn = document.getElementById('tl-start-btn');
+  startBtn.className = 'btn btn-tl';
+  startBtn.style.cssText = 'width:100%;justify-content:center';
+  startBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="8" cy="8" r="6"/><path d="M8 4v4l2.5 2.5"/></svg> Start Timelapse';
+  _showTLIdle();
+}
+
+async function pollTL() {
+  try {
+    const r = await fetch('/api/timelapse/status');
+    const d = await r.json();
+    const count = d.count || 0;
+
+    document.getElementById('frame-count').textContent = String(count).padStart(4, '0');
+    if (tlDuration_ > 0) {
+      const projFrames = Math.floor(tlDuration_ / tlInterval_);
+      document.getElementById('tl-videst').textContent = '~' + fmtVideoLen(projFrames / 24);
+    } else {
+      const fph = Math.floor(3600 / tlInterval_);
+      document.getElementById('tl-videst').textContent = '~' + fmtVideoLen(fph / 24) + '/hr';
+    }
+
+    // Advance next-frame estimate whenever a new frame arrives
+    if (tlRunning && tlInterval_ && count > 0) {
+      tlNextFrameAt_ = tlStart_ + count * tlInterval_ * 1000;
+    }
+
+    if (!d.running && tlRunning) {
+      _tlStopped();
+      toast('\u2713 Timelapse complete \u2014 ' + count + ' frames \u2014 compiling\u2026', 'success');
+      setTimeout(loadVideos, 8000);
+    }
+  } catch (_) {}
+}
+
+// ── Stats ──────────────────────────────────────────────────────────────────────
+function startStats() {
+  fetchStats();
+  statsTimer = setInterval(fetchStats, 5000);
+  document.addEventListener('visibilitychange', _onVisibilityChange);
+}
+
+// Pause all background polling when the browser tab is hidden (power saving).
+// Resume immediately when the tab becomes visible again.
+function _onVisibilityChange() {
+  if (document.hidden) {
+    clearInterval(statsTimer);   statsTimer   = null;
+    clearInterval(tlPollTimer);  tlPollTimer  = null;
+    clearInterval(tlClockTimer); tlClockTimer = null;
+  } else {
+    fetchStats();
+    if (!statsTimer)   statsTimer   = setInterval(fetchStats, 5000);
+    if (tlRunning && !tlPollTimer)  tlPollTimer  = setInterval(pollTL, _tlPollMs);
+    if (tlRunning && !tlClockTimer) tlClockTimer = setInterval(_tlClockTick, 1000);
+  }
+}
+
+async function fetchStats() {
+  try {
+    const r = await fetch('/api/stats');
+    const d = await r.json();
+    renderStats(d);
+  } catch (_) {}
+}
+
+// Gauge circumference for r=38: 2π×38 = 238.76
+const CIRC = 238.76;
+
+function gaugeColor(pct, warn = 60, crit = 80) {
+  if (pct >= crit)  return '#ef4444';  // red
+  if (pct >= warn)  return '#f59e0b';  // amber
+  return '#22c55e';                    // leaf green
+}
+
+function setGauge(arcId, valId, pct, label) {
+  const arc = document.getElementById(arcId);
+  const val = document.getElementById(valId);
+  if (!arc || !val) return;
+  const clamped = Math.min(100, Math.max(0, pct));
+  arc.style.strokeDashoffset = CIRC * (1 - clamped / 100);
+  arc.style.stroke = gaugeColor(clamped);
+  val.textContent = label;
+}
+
+function fmtBytes(bps) {
+  if (bps < 1024)        return '< 1 KB/s';
+  if (bps < 1024 * 1024) return (bps / 1024).toFixed(0) + ' KB/s';
+  return (bps / (1024 * 1024)).toFixed(1) + ' MB/s';
+}
+
+function fmtUptime(s) {
+  const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60);
+  return h > 0 ? h + 'h ' + m + 'm' : m + 'm';
+}
+
+function fmtGB(bytes) {
+  return (bytes / (1024 * 1024 * 1024)).toFixed(1) + ' GB';
+}
+
+function renderStats(d) {
+  // Circular gauges
+  setGauge('arc-cpu',  'gv-cpu',  d.cpu_percent,  d.cpu_percent);
+  setGauge('arc-ram',  'gv-ram',  d.mem_percent,  d.mem_percent);
+  setGauge('arc-disk', 'gv-disk', d.disk_percent, d.disk_percent);
+
+  if (d.temperature !== null) {
+    const tPct = (d.temperature / 85) * 100;
+    setGauge('arc-temp', 'gv-temp', tPct, d.temperature);
+    // Override temp colour thresholds (55°C = warn, 72°C = crit)
+    document.getElementById('arc-temp').style.stroke = gaugeColor(tPct, 65, 85);
+  }
+
+  // Info chips
+  document.getElementById('ic-fps').textContent    = d.fps != null ? d.fps + ' fps' : '—';
+  document.getElementById('ic-recv').textContent      = d.net_recv_bps != null ? fmtBytes(d.net_recv_bps) : '—';
+  document.getElementById('ic-send').textContent      = d.net_send_bps != null ? fmtBytes(d.net_send_bps) : '—';
+  document.getElementById('ic-wifi-rate').textContent = d.wifi_rate_mbps != null ? d.wifi_rate_mbps.toFixed(0) + ' Mb/s' : '—';
+  if (d.wifi_signal_dbm != null) {
+    const sig = d.wifi_signal_dbm;
+    const sigEl = document.getElementById('ic-wifi-signal');
+    const label = sig >= -55 ? 'Excellent' : sig >= -65 ? 'Good' : sig >= -75 ? 'Fair' : 'Weak';
+    const color = sig >= -55 ? 'var(--green)' : sig >= -65 ? 'var(--green-md)' : sig >= -75 ? 'var(--amber-lt)' : 'var(--red)';
+    sigEl.textContent = label + ' (' + sig + ' dBm)';
+    sigEl.style.color = color;
+  } else {
+    document.getElementById('ic-wifi-signal').textContent = '—';
+  }
+  document.getElementById('ic-uptime').textContent = d.uptime ? fmtUptime(d.uptime) : '—';
+  if (d.mem_used != null && d.mem_total != null) {
+    document.getElementById('ic-ram-usage').textContent = fmtGB(d.mem_used) + ' / ' + fmtGB(d.mem_total);
+  }
+  if (d.disk_used != null && d.disk_total != null) {
+    document.getElementById('ic-disk-used').textContent  = fmtGB(d.disk_used);
+    document.getElementById('ic-disk-free').textContent  = fmtGB(d.disk_total - d.disk_used);
+    document.getElementById('ic-disk-total').textContent = fmtGB(d.disk_total);
+  }
+}
+
+// ── Toast ──────────────────────────────────────────────────────────────────────
+let toastTimer = null;
+function toast(msg, type = '') {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className = 'toast' + (type ? ' ' + type : '') + ' show';
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove('show'), 3000);
+}
+
+// ── Film filter panel ──────────────────────────────────────────────────────────
+
+const FILM_DESCS = {
+  none:      '',
+  portra:    'Warm skin tones, lifted shadows, creamy pastel palette.',
+  velvia:    'Punchy, vivid colours with deep shadows — landscape favourite.',
+  hp5:       'Classic panchromatic B&W — smooth mids, full tonal range.',
+  cinestill: 'Tungsten-balanced motion-picture stock with cyan/teal shadows.',
+  trix:      'High-contrast B&W street film — deep blacks, snappy highlights.',
+  provia:    'Accurate, neutral colours with a crisp, slightly cool character.',
+  ektar:     'Hyper-saturated fine-grain film — vivid reds and deep blues.',
+  agfa:      'Warm, faded vintage look with a gentle green cast in mids.',
+};
+
+function toggleFilterPanel() {
+  if (filterPanelOpen) {
+    filterPanelOpen = false;
+    document.getElementById('filter-panel').classList.add('panel-closed');
+    document.getElementById('filter-btn').classList.remove('active');
+  } else {
+    closeOtherPanels('filter-panel');
+    filterPanelOpen = true;
+    document.getElementById('filter-panel').classList.remove('panel-closed');
+    document.getElementById('filter-btn').classList.add('active');
+  }
+}
+
+function setFilm(el) {
+  document.querySelectorAll('#film-chips .film-card, #film-chips .film-clear').forEach(b => b.classList.remove('active'));
+  el.classList.add('active');
+  const film = el.dataset.film;
+  _ctrl.film_filter = film;
+  _ctrl.film_strength = 100;
+  // Reset all in-card sliders to 100% when switching filters
+  document.querySelectorAll('.film-strength input[type=range]').forEach(sl => {
+    sl.value = 100;
+    sl.closest('.film-strength').querySelector('.film-strength-pct').textContent = '100%';
+  });
+  document.getElementById('film-desc').textContent = FILM_DESCS[film] || '';
+  document.getElementById('filter-btn').classList.toggle('active', film !== 'none');
+  sendCtrl();
+}
+
+function onFilmStrength(el) {
+  const v = parseInt(el.value, 10);
+  _ctrl.film_strength = v;
+  el.closest('.film-strength').querySelector('.film-strength-pct').textContent = v + '%';
+  scheduleCtrl();
+}
+
+// ── Camera controls panel ──────────────────────────────────────────────────────
+
+// Mirrors _cam_ctrl_defaults on the server
+const CTRL_DEFAULTS = {
+  exposure_time: 0, analogue_gain: 0.0,
+  awb_mode: 'auto', awb_kelvin: 5600,
+  sharpness: 1.0, contrast: 1.0, noise_reduction: 'fast',
+  brightness: 0, saturation: 0, tint: 0,
+  hflip: false, vflip: false,
+  film_filter: 'none',
+  film_strength: 100,
+};
+let _ctrl = Object.assign({}, CTRL_DEFAULTS);
+let _ctrlDebounce = null;
+
+// Discrete shutter speed steps (microseconds); index 0 = Auto
+const SHUTTER_STEPS = [0, 500, 2000, 8333, 16667, 33333, 66667, 250000, 1000000];
+const GAIN_STEPS = [0, 1, 2, 4, 8, 16];
+let _shutterAngleMode = false;
+
+function fmtShutterStep(idx) {
+  const us = SHUTTER_STEPS[idx | 0];
+  if (us === 0) return 'Auto';
+  if (_shutterAngleMode) return Math.round(us * 360 / 33333) + '°';
+  if (us >= 1000000) return (us / 1000000).toFixed(1) + 's';
+  return '1/' + Math.round(1000000 / us);
+}
+
+function _exposureToStep(us) {
+  let best = 0, bestDist = Infinity;
+  for (let i = 0; i < SHUTTER_STEPS.length; i++) {
+    const d = Math.abs(SHUTTER_STEPS[i] - us);
+    if (d < bestDist) { bestDist = d; best = i; }
+  }
+  return best;
+}
+
+function onShutterSlider(el) {
+  const idx = parseInt(el.value, 10);
+  _ctrl.exposure_time = SHUTTER_STEPS[idx];
+  document.getElementById('ctrl-val-exposure').textContent = fmtShutterStep(idx);
+  document.querySelectorAll('#shutter-presets .tl-preset').forEach((p, i) =>
+    p.classList.toggle('active', i === idx));
+  scheduleCtrl();
+}
+
+function setShutterStep(idx) {
+  const sl = document.getElementById('ctrl-sl-exposure');
+  sl.value = idx;
+  onShutterSlider(sl);
+}
+
+function onGainSlider(el) {
+  const idx = parseInt(el.value, 10);
+  const v = GAIN_STEPS[idx];
+  _ctrl.analogue_gain = v;
+  document.getElementById('ctrl-val-gain').textContent = fmtGain(v);
+  document.querySelectorAll('#gain-presets .tl-preset').forEach((p, i) =>
+    p.classList.toggle('active', i === idx));
+  scheduleCtrl();
+}
+
+function setGainStep(idx) {
+  const sl = document.getElementById('ctrl-sl-gain');
+  sl.value = idx;
+  onGainSlider(sl);
+}
+
+function _gainToStep(v) {
+  let best = 0, bestDist = Infinity;
+  GAIN_STEPS.forEach((s, i) => {
+    const d = Math.abs(s - v);
+    if (d < bestDist) { bestDist = d; best = i; }
+  });
+  return best;
+}
+
+function toggleShutterMode() {
+  _shutterAngleMode = !_shutterAngleMode;
+  document.getElementById('shutter-angle-btn').classList.toggle('active', _shutterAngleMode);
+  const lbl = document.getElementById('shutter-mode-label');
+  lbl.innerHTML = _shutterAngleMode
+    ? 'Shutter angle <span style="color:var(--dim)">(0 = auto, @30fps)</span>'
+    : 'Shutter speed <span style="color:var(--dim)">(0 = auto)</span>';
+  const sl = document.getElementById('ctrl-sl-exposure');
+  document.getElementById('ctrl-val-exposure').textContent = fmtShutterStep(parseInt(sl.value, 10));
+}
+
+function toggleFeedFlip(key) {
+  _ctrl[key] = !_ctrl[key];
+  document.getElementById('feed-hflip-btn').classList.toggle('active', _ctrl.hflip);
+  document.getElementById('feed-vflip-btn').classList.toggle('active', _ctrl.vflip);
+  scheduleCtrl();
+}
+
+function toggleCtrlPanel() {
+  if (ctrlPanelOpen) {
+    ctrlPanelOpen = false;
+    document.getElementById('ctrl-panel').classList.add('panel-closed');
+    document.getElementById('ctrl-btn').classList.remove('active');
+  } else {
+    closeOtherPanels('ctrl-panel');
+    ctrlPanelOpen = true;
+    document.getElementById('ctrl-panel').classList.remove('panel-closed');
+    document.getElementById('ctrl-btn').classList.add('active');
+  }
+}
+
+// Called by every slider — updates _ctrl, refreshes display label, debounces send
+function onCtrlSlider(key, el, lblId, fmt) {
+  const v = parseFloat(el.value);
+  _ctrl[key] = v;
+  document.getElementById(lblId).textContent = fmt(v);
+  scheduleCtrl();
+}
+
+const _AWB_PRESET_K = { daylight: 5600, cloudy: 6500, fluorescent: 4000, indoor: 3200, tungsten: 2900 };
+
+function setCtrlAwb(el) {
+  document.querySelectorAll('#ctrl-awb-btns .res-opt').forEach(b => b.classList.remove('active'));
+  el.classList.add('active');
+  const mode = el.dataset.awb;
+  if (mode === 'auto') {
+    _ctrl.awb_mode = 'auto';
+  } else {
+    _ctrl.awb_mode = 'manual';
+    if (_AWB_PRESET_K[mode] !== undefined) {
+      _ctrl.awb_kelvin = _AWB_PRESET_K[mode];
+      _setKelvinDisplay(_ctrl.awb_kelvin);
+    }
+  }
+  document.getElementById('ctrl-kelvin-row').style.display = mode === 'auto' ? 'none' : '';
+  scheduleCtrl();
+}
+
+function onKelvinSlider(el) {
+  const k = parseInt(el.value, 10);
+  _ctrl.awb_kelvin = k;
+  document.getElementById('ctrl-val-ktemp').textContent = k + ' K';
+  document.querySelectorAll('#ctrl-awb-btns .res-opt').forEach(b =>
+    b.classList.toggle('active', b.dataset.awb !== 'auto' && _AWB_PRESET_K[b.dataset.awb] === k));
+  scheduleCtrl();
+}
+
+function _setKelvinDisplay(k) {
+  const sl = document.getElementById('ctrl-sl-ktemp');
+  const lbl = document.getElementById('ctrl-val-ktemp');
+  if (sl) sl.value = k;
+  if (lbl) lbl.textContent = k + ' K';
+}
+
+function setCtrlNR(el) {
+  document.querySelectorAll('#ctrl-nr-btns .res-opt').forEach(b => b.classList.remove('active'));
+  el.classList.add('active');
+  _ctrl.noise_reduction = el.dataset.nr;
+  scheduleCtrl();
+}
+
+function toggleCtrlFlip(key, btn) {
+  _ctrl[key] = !_ctrl[key];
+  btn.classList.toggle('active', _ctrl[key]);
+  scheduleCtrl();
+}
+
+function scheduleCtrl() {
+  clearTimeout(_ctrlDebounce);
+  _ctrlDebounce = setTimeout(sendCtrl, 80);
+}
+
+async function sendCtrl() {
+  try {
+    await fetch('/api/camera_controls', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(_ctrl),
+    });
+  } catch (_) {}
+}
+
+async function resetCtrlDefaults() {
+  Object.assign(_ctrl, CTRL_DEFAULTS);
+  syncCtrlUI();
+  await sendCtrl();
+  toast('Controls reset to defaults', 'success');
+}
+
+function syncCtrlUI() {
+  // Sliders + value labels
+  // Exposure: discrete step slider
+  const expStep = _exposureToStep(_ctrl.exposure_time);
+  const expSl = document.getElementById('ctrl-sl-exposure');
+  if (expSl) expSl.value = expStep;
+  const expLbl = document.getElementById('ctrl-val-exposure');
+  if (expLbl) expLbl.textContent = fmtShutterStep(expStep);
+  document.querySelectorAll('#shutter-presets .tl-preset').forEach((p, i) =>
+    p.classList.toggle('active', i === expStep));
+
+  // Gain: discrete step slider
+  const gainStep = _gainToStep(_ctrl.analogue_gain);
+  const gainSl = document.getElementById('ctrl-sl-gain');
+  if (gainSl) gainSl.value = gainStep;
+  const gainLbl = document.getElementById('ctrl-val-gain');
+  if (gainLbl) gainLbl.textContent = fmtGain(_ctrl.analogue_gain);
+  document.querySelectorAll('#gain-presets .tl-preset').forEach((p, i) =>
+    p.classList.toggle('active', i === gainStep));
+
+  const sliders = [
+    ['ctrl-sl-sharpness', 'ctrl-val-sharpness', _ctrl.sharpness,      v => v.toFixed(1)],
+    ['ctrl-sl-contrast',  'ctrl-val-contrast',  _ctrl.contrast,       v => v.toFixed(2)],
+    ['ctrl-sl-brightness','ctrl-val-brightness',_ctrl.brightness,     v => (v > 0 ? '+' : '') + v],
+    ['ctrl-sl-saturation','ctrl-val-saturation',_ctrl.saturation,     v => (v > 0 ? '+' : '') + v],
+    ['ctrl-sl-tint',      'ctrl-val-tint',      _ctrl.tint,           fmtTint],
+  ];
+  sliders.forEach(([slId, lblId, val, fmt]) => {
+    const sl = document.getElementById(slId);
+    if (sl) sl.value = val;
+    const lbl = document.getElementById(lblId);
+    if (lbl) lbl.textContent = fmt(val);
+  });
+  // AWB
+  document.querySelectorAll('#ctrl-awb-btns .res-opt').forEach(b => {
+    const isAuto   = b.dataset.awb === 'auto' && _ctrl.awb_mode === 'auto';
+    const isPreset = b.dataset.awb !== 'auto' && _ctrl.awb_mode !== 'auto'
+                     && _AWB_PRESET_K[b.dataset.awb] === _ctrl.awb_kelvin;
+    b.classList.toggle('active', isAuto || isPreset);
+  });
+  const _kRow = document.getElementById('ctrl-kelvin-row');
+  if (_kRow) _kRow.style.display = _ctrl.awb_mode === 'auto' ? 'none' : '';
+  _setKelvinDisplay(_ctrl.awb_kelvin);
+  // NR chips
+  document.querySelectorAll('#ctrl-nr-btns .res-opt').forEach(b =>
+    b.classList.toggle('active', b.dataset.nr === _ctrl.noise_reduction));
+  // Flip buttons (feed overlay)
+  document.getElementById('feed-hflip-btn').classList.toggle('active', _ctrl.hflip);
+  document.getElementById('feed-vflip-btn').classList.toggle('active', _ctrl.vflip);
+  // Film chips
+  document.querySelectorAll('#film-chips .film-card, #film-chips .film-clear').forEach(b =>
+    b.classList.toggle('active', b.dataset.film === _ctrl.film_filter));
+  document.getElementById('film-desc').textContent = FILM_DESCS[_ctrl.film_filter] || '';
+  document.getElementById('filter-btn').classList.toggle('active', _ctrl.film_filter !== 'none');
+  // Sync in-card strength slider for the active film
+  const _activeCard = document.querySelector('#film-chips .film-card.active');
+  if (_activeCard) {
+    const _sSl = _activeCard.querySelector('.film-strength input[type=range]');
+    const _sPct = _activeCard.querySelector('.film-strength-pct');
+    if (_sSl)  _sSl.value = _ctrl.film_strength;
+    if (_sPct) _sPct.textContent = _ctrl.film_strength + '%';
+  }
+}
+
+// Value formatters
+function fmtExposure(v) {
+  if (v === 0) return 'Auto';
+  if (v < 1000) return v + ' µs';
+  return (v / 1000).toFixed(1) + ' ms';
+}
+function fmtGain(v) { return v === 0 ? 'Auto' : '×' + v.toFixed(1); }
+function fmtTint(v) {
+  if (v === 0) return 'Neutral';
+  if (v > 0)   return '+' + v + ' magenta';
+  return Math.abs(v) + ' green';
+}
+
+// ── Timelapse time/duration helpers ────────────────────────────────────────────
+function fmtHMS(secs) {
+  const s = Math.max(0, Math.round(secs));
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const sec = s % 60;
+  if (h > 0) return `${h}:${String(m).padStart(2,'0')}:${String(sec).padStart(2,'0')}`;
+  return `${String(m).padStart(2,'0')}:${String(sec).padStart(2,'0')}`;
+}
+function fmtVideoLen(secs) {
+  if (secs < 60) return secs.toFixed(1) + 's';
+  const m = Math.floor(secs / 60);
+  const s = Math.round(secs % 60);
+  return s > 0 ? `${m}m ${s}s` : `${m}m`;
+}
+
+// Compute and render the idle "preview" line from current slider positions.
+// Update the frame counter + video estimate with projected values from current slider pos.
+// Called whenever sliders move (idle) or on load.
+function updateTLPreview() {
+  const iIdx     = parseInt(document.getElementById('tl-interval-slider').value, 10);
+  const dIdx     = parseInt(document.getElementById('tl-dur-slider').value, 10);
+  const interval = TL_INTERVAL_S[iIdx];
+  const duration = TL_DUR_S[dIdx];
+  const fc  = document.getElementById('frame-count');
+  const vid = document.getElementById('tl-videst');
+  if (duration === 0) {
+    const fph = Math.floor(3600 / interval);
+    fc.textContent  = '∞';
+    vid.textContent = `~${fmtVideoLen(fph / 24)}/hr`;
+  } else {
+    const frames = Math.floor(duration / interval);
+    fc.textContent  = String(frames);
+    vid.textContent = `~${fmtVideoLen(frames / 24)}`;
+  }
+}
+
+// Switch status block between running / idle appearances.
+function _showTLRunning(hasDeadline) {
+  document.getElementById('tl-prog-track').style.display  = hasDeadline ? 'block' : 'none';
+  document.getElementById('tl-time-row').style.display    = 'flex';
+  document.getElementById('tl-rem-col').style.opacity     = hasDeadline ? '1' : '0.35';
+  document.getElementById('tl-next-row').style.display    = 'flex';
+  document.getElementById('tl-frame-lbl').textContent     = 'frames captured';
+  document.getElementById('tl-videst-lbl').textContent    = 'video length';
+  document.getElementById('frame-count').style.opacity    = '1';
+  document.getElementById('tl-videst').style.opacity      = '1';
+}
+function _showTLIdle() {
+  document.getElementById('tl-prog-track').style.display  = 'none';
+  document.getElementById('tl-time-row').style.display    = 'none';
+  document.getElementById('tl-next-row').style.display    = 'none';
+  document.getElementById('tl-frame-lbl').textContent     = 'total frames';
+  document.getElementById('tl-videst-lbl').textContent    = 'video length';
+  document.getElementById('frame-count').style.opacity    = '0.55';
+  document.getElementById('tl-videst').style.opacity      = '0.75';
+  updateTLPreview();
+}
+
+// 1-second clock tick: updates elapsed, remaining, next-shot countdown, and tl-btn.
+function _tlClockTick() {
+  if (!tlRunning || !tlStart_) return;
+  const elapsed = (Date.now() - tlStart_) / 1000;
+
+  document.getElementById('tl-elapsed').textContent = fmtHMS(elapsed);
+
+  const remEl = document.getElementById('tl-remaining');
+  if (tlDuration_ > 0) {
+    remEl.textContent = fmtHMS(Math.max(0, tlDuration_ - elapsed));
+    const pct = Math.min(100, elapsed / tlDuration_ * 100);
+    document.getElementById('tl-prog-fill').style.width = pct + '%';
+  } else {
+    remEl.textContent = '∞';
+  }
+
+  if (tlNextFrameAt_) {
+    const sec = Math.max(0, Math.ceil((tlNextFrameAt_ - Date.now()) / 1000));
+    document.getElementById('tl-next-txt').textContent =
+      sec <= 1 ? 'capturing…' : `next shot in ${sec}s`;
+  }
+
+  // Also keep the tl-btn header badge updated
+  const s  = Math.floor(elapsed);
+  const mm = String(Math.floor(s / 60)).padStart(2, '0');
+  const ss = String(s % 60).padStart(2, '0');
+  document.getElementById('tl-btn').innerHTML =
+    '<svg width="11" height="11" viewBox="0 0 16 16" fill="currentColor"><rect x="3" y="3" width="10" height="10" rx="1"/></svg> ' + mm + ':' + ss;
+}
+
+// ── Inject strength slider into each film card ─────────────────────────────────
+document.querySelectorAll('#film-chips .film-card').forEach(card => {
+  const body = card.querySelector('.film-body');
+  if (!body) return;
+  const div = document.createElement('div');
+  div.className = 'film-strength';
+  div.innerHTML =
+    '<div class="film-strength-hdr">' +
+      '<span class="film-strength-lbl">Strength</span>' +
+      '<span class="film-strength-pct">100%</span>' +
+    '</div>' +
+    '<input type="range" min="0" max="100" step="1" value="100" ' +
+           'oninput="onFilmStrength(this)" style="touch-action:none">';
+  // Prevent slider clicks/touches from bubbling to the film-card button,
+  // which would call setFilm() and reset strength back to 100.
+  div.addEventListener('pointerdown', e => e.stopPropagation());
+  div.addEventListener('click',       e => e.stopPropagation());
+  body.appendChild(div);
+});
+
+// ── Keyboard shortcuts ─────────────────────────────────────────────────────────
+document.addEventListener('keydown', e => {
+  if (e.target.tagName === 'INPUT') return;
+  if (e.key === 's' || e.key === 'S') takeSnapshot();
+  if (e.key === 'r' || e.key === 'R') toggleRecord();
+  if (e.key === 't' || e.key === 'T') toggleTimelapse();
+});
+</script>
+</body>
+</html>

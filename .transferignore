@@ -1,0 +1,32 @@
+# .transferignore — paths to skip when rsync-ing to a new Pi
+# Used by the rsync command in docs/TRANSFER.md.
+
+# Captured media — don't copy to a new Pi by default
+data/
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# Temporary ffmpeg/recording files
+*.mjpeg
+data/videos/_tl_list_*.txt
+
+# Log files
+*.log
+
+# Editor / IDE
+.vscode/
+.idea/
+*.swp
+*~
+
+# macOS
+.DS_Store
+
+# Environment files (if added in future)
+.env
+.env.*

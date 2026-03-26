@@ -1,0 +1,20 @@
+# Garden Monitor — configuration template
+# Copy this file to settings.yaml and edit for your device:
+#   cp config/settings.yaml.example config/settings.yaml
+#
+# settings.yaml is gitignored so each Pi keeps its own local copy.
+# git pull will never overwrite your device-specific settings.
+
+server:
+  host: "0.0.0.0"      # listen on all interfaces; change to 127.0.0.1 to restrict
+  port: 8080
+
+camera:
+  name: "my-pi"                   # identifies this feed — change per device (e.g. "Pi 4 Garden")
+  default_resolution: "1280x720"  # 640x480 | 1280x720 | 1920x1080
+  hflip: false                    # flip image horizontally at startup
+  vflip: false                    # flip image vertically at startup
+
+paths:
+  photos: "data/photos"   # relative to the project root
+  videos: "data/videos"   # relative to the project root

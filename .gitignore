@@ -1,0 +1,43 @@
+# Garden Monitor — Git ignore rules
+
+# Device-specific config (each Pi has its own; copy from settings.yaml.example)
+config/settings.yaml
+
+# Captured media — device-specific and potentially large
+data/photos/*
+data/videos/*
+# Keep the directory structure
+!data/photos/.gitkeep
+!data/videos/.gitkeep
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# Virtual environments
+venv/
+.venv/
+env/
+
+# Temporary ffmpeg/recording files
+*.mjpeg
+data/videos/_tl_list_*.txt
+
+# Log files
+*.log
+
+# Editor / IDE
+.vscode/
+.idea/
+*.swp
+*~
+
+# macOS
+.DS_Store
+
+# Environment files
+.env
+.env.*
