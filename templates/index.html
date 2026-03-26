@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Garden Monitor Pi5</title>
+<title>Home Garden Cameras</title>
 <style>
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 /* Touch: remove tap flash and prevent accidental text selection on buttons */
@@ -96,6 +96,7 @@ header::after {
   background-clip: text;
 }
 .header-sub { font-size: 12px; color: var(--muted); margin-top: 3px; letter-spacing: 0.01em; }
+.header-tagline { font-size: 11px; color: var(--dim); font-style: italic; margin-top: 1px; letter-spacing: 0.04em; }
 
 .status-pill {
   display: inline-flex; align-items: center; gap: 7px;
@@ -991,7 +992,8 @@ input[type=range]:disabled::-webkit-slider-thumb { background: var(--dim); box-s
         </svg>
       </div>
       <div style="display:flex;flex-direction:column;align-items:center">
-        <div class="header-title">Garden Monitor</div>
+        <div class="header-title">Home Garden Cameras</div>
+        <div class="header-tagline">growing memories</div>
         <div class="header-sub" id="camera-model">Loading&hellip;</div>
         <div class="status-pill" id="status-pill">
           <span class="dot" id="status-dot"></span>

@@ -30,6 +30,9 @@ DEFAULT_RESOLUTION = _cfg["camera"]["default_resolution"]
 if DEFAULT_RESOLUTION not in RESOLUTIONS:
     DEFAULT_RESOLUTION = "1280x720"
 
+# ── Dashboard camera list ─────────────────────────────────────────────────────
+CAMERAS = _cfg.get("cameras", [])
+
 # ── libcamera constants ───────────────────────────────────────────────────────
 AWB_MODES = {
     "auto": 0, "incandescent": 1, "tungsten": 2, "fluorescent": 3,

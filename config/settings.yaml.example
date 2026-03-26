@@ -18,3 +18,17 @@ camera:
 paths:
   photos: "data/photos"   # relative to the project root
   videos: "data/videos"   # relative to the project root
+
+# ── Dashboard — list of camera Pis to show in the /dashboard grid ─────────────
+# Add one entry per camera Pi. Use the Pi's LAN IP — 'localhost' only works if
+# the browser is running on that same machine.
+cameras:
+  - name: "Camera 1"
+    host: "192.168.1.101"
+    port: 8080
+  - name: "Camera 2"
+    host: "192.168.1.102"
+    port: 8080
+  - name: "Camera 3"
+    host: "192.168.1.103"
+    port: 8080

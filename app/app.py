@@ -9,11 +9,13 @@ from .camera import camera, cam_ctrl, cam_ctrl_lock
 from .timelapse import timelapse, get_compile_status
 from .recorder import video_recorder
 from .stats import get_stats, get_pi_info
+from .dashboard import dashboard as dashboard_bp
 
 # Wire the recorder into the camera stream so it captures what the user sees
 camera.output.recorder = video_recorder
 
 app = Flask(__name__, template_folder=str(Path(__file__).parent.parent / "templates"))
+app.register_blueprint(dashboard_bp)
 
 
 # ── Stream ─────────────────────────────────────────────────────────────────────
