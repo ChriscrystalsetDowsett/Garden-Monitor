@@ -30,6 +30,8 @@ DEFAULT_RESOLUTION = _cfg["camera"]["default_resolution"]
 if DEFAULT_RESOLUTION not in RESOLUTIONS:
     DEFAULT_RESOLUTION = "1280x720"
 
+CAM_BACKEND = _cfg["camera"].get("backend", "picamera2")   # "picamera2" | "v4l2"
+
 # ── Dashboard camera list ─────────────────────────────────────────────────────
 CAMERAS = _cfg.get("cameras", [])
 

@@ -1,26 +1,29 @@
-"""Camera hardware management, picamera2 post-processing pipeline, and stream output."""
-import io, time, threading
+"""Camera hardware management — supports picamera2 (CSI) and V4L2/OpenCV (USB)."""
+import io, time, threading, subprocess
 from datetime import datetime
 
 import cv2
 import numpy as np
 from PIL import Image, ImageEnhance, ImageFilter, ImageOps
-from picamera2 import Picamera2
 
-from .config import SNAPSHOT_DIR, RESOLUTIONS, CAM_CTRL_DEFAULTS, DEFAULT_RESOLUTION
+from .config import SNAPSHOT_DIR, RESOLUTIONS, CAM_CTRL_DEFAULTS, DEFAULT_RESOLUTION, CAM_BACKEND
 from .film import FILM_FILTERS
 from .postprocess import postprocess_jpeg
 
 FPS          = 24
 JPEG_QUALITY = 85
+V4L2_DEVICE  = "/dev/video0"
 
-# ── Live camera controls (per-frame effects + ISP) ─────────────────────────────
-# Shared mutable state; protected by cam_ctrl_lock.
-cam_ctrl = dict(CAM_CTRL_DEFAULTS)
+# Optional picamera2 import — only needed on CSI camera Pis.
+if CAM_BACKEND == "picamera2":
+    from picamera2 import Picamera2
+
+# ── Live camera controls (per-frame effects) ───────────────────────────────────
+cam_ctrl      = dict(CAM_CTRL_DEFAULTS)
 cam_ctrl_lock = threading.Lock()
 
 
-# ── OpenCV post-processing ─────────────────────────────────────────────────────
+# ── OpenCV post-processing (shared by both backends) ──────────────────────────
 def _apply_ocv(buf, s):
     """Post-processing: tint shift, flip, film simulation."""
     try:
@@ -29,28 +32,25 @@ def _apply_ocv(buf, s):
         if frame is None:
             return buf
 
-        # Flip
         hf, vf = s.get("hflip", False), s.get("vflip", False)
         if hf and vf:   frame = cv2.flip(frame, -1)
         elif hf:        frame = cv2.flip(frame, 1)
         elif vf:        frame = cv2.flip(frame, 0)
 
-        # Tint: green (−) or magenta (+) channel shift
         t = s.get("tint", 0)
         if t:
             strength = abs(t) * 40 // 100
             ch = list(cv2.split(frame.astype(np.int16)))
-            if t > 0:   # magenta: boost R+B, reduce G
+            if t > 0:
                 ch[2] = np.clip(ch[2] + strength, 0, 255)
                 ch[0] = np.clip(ch[0] + strength // 2, 0, 255)
                 ch[1] = np.clip(ch[1] - strength, 0, 255)
-            else:       # green: boost G, reduce R+B
+            else:
                 ch[1] = np.clip(ch[1] + strength, 0, 255)
                 ch[2] = np.clip(ch[2] - strength, 0, 255)
                 ch[0] = np.clip(ch[0] - strength // 2, 0, 255)
             frame = cv2.merge([c.astype(np.uint8) for c in ch])
 
-        # Film simulation
         ff = s.get("film_filter", "none")
         if ff and ff != "none":
             fd = FILM_FILTERS.get(ff)
@@ -79,7 +79,7 @@ def _apply_ocv(buf, s):
         return buf
 
 
-# ── PIL-based snapshot filter ──────────────────────────────────────────────────
+# ── PIL snapshot filter (shared by both backends) ─────────────────────────────
 def _apply_filter(img, name):
     if name == "grayscale":
         return ImageOps.grayscale(img).convert("RGB")
@@ -100,12 +100,12 @@ def _apply_filter(img, name):
     return img
 
 
-# ── Stream output ──────────────────────────────────────────────────────────────
+# ── Stream output (shared by both backends) ────────────────────────────────────
 class StreamOutput(io.BufferedIOBase):
     def __init__(self):
-        self.frame = None
-        self.condition = threading.Condition()
-        self.recorder = None  # wired up after VideoRecorder is created
+        self.frame      = None
+        self.condition  = threading.Condition()
+        self.recorder   = None
         self._fps_lock  = threading.Lock()
         self._fps_count = 0
         self._fps_ts    = time.time()
@@ -114,10 +114,9 @@ class StreamOutput(io.BufferedIOBase):
     def write(self, buf):
         with cam_ctrl_lock:
             s = {k: cam_ctrl[k] for k in ("tint", "hflip", "vflip", "film_filter", "film_strength")}
-        if s["tint"] or s["hflip"] or s["vflip"] or s["film_filter"] != "none":
-            displayed = _apply_ocv(buf, s)
-        else:
-            displayed = buf
+        displayed = _apply_ocv(buf, s) if (
+            s["tint"] or s["hflip"] or s["vflip"] or s["film_filter"] != "none"
+        ) else buf
 
         with self.condition:
             self.frame = displayed
@@ -138,17 +137,20 @@ class StreamOutput(io.BufferedIOBase):
 # ── Camera manager ─────────────────────────────────────────────────────────────
 class CameraManager:
     def __init__(self):
-        self.lock        = threading.Lock()
-        self.output      = StreamOutput()
-        self.res_key     = DEFAULT_RESOLUTION
-        self.resolution  = RESOLUTIONS[self.res_key]
-        self.model       = "Unknown"
-        self._stop       = threading.Event()
-        self._restart    = threading.Event()
-        self._picam2     = None
+        self.lock       = threading.Lock()
+        self.output     = StreamOutput()
+        self.res_key    = DEFAULT_RESOLUTION
+        self.resolution = RESOLUTIONS[self.res_key]
+        self.model      = "Unknown"
+        self._stop      = threading.Event()
+        self._restart   = threading.Event()
+        # Backend-specific handle (cv2.VideoCapture or Picamera2 instance)
+        self._handle    = None
         threading.Thread(target=self._capture_loop, daemon=True, name="capture").start()
 
-    def _open_camera(self):
+    # ── picamera2 backend ──────────────────────────────────────────────────────
+
+    def _open_picamera2(self):
         w, h = self.resolution
         try:
             picam2 = Picamera2()
@@ -164,11 +166,11 @@ class CameraManager:
         except Exception:
             return None
 
-    def _capture_loop(self):
+    def _loop_picamera2(self):
         backoff = 1
         while not self._stop.is_set():
             self._restart.clear()
-            picam2 = self._open_camera()
+            picam2 = self._open_picamera2()
             if picam2 is None:
                 if self._stop.wait(backoff):
                     break
@@ -176,10 +178,9 @@ class CameraManager:
                 continue
             backoff = 1
             with self.lock:
-                self._picam2 = picam2
+                self._handle = picam2
             with cam_ctrl_lock:
-                _init_ctrl = dict(cam_ctrl)
-            self.apply_isp_controls(_init_ctrl)
+                self.apply_isp_controls(dict(cam_ctrl))
             failures = 0
             while not self._stop.is_set() and not self._restart.is_set():
                 try:
@@ -191,7 +192,6 @@ class CameraManager:
                     time.sleep(0.05)
                     continue
                 failures = 0
-                # picamera2 RGB888 = V4L2 BGR24: array is already BGR, OpenCV-native
                 ok, buf = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, JPEG_QUALITY])
                 if ok:
                     self.output.write(buf.tobytes())
@@ -201,12 +201,75 @@ class CameraManager:
             except Exception:
                 pass
             with self.lock:
-                if self._picam2 is picam2:
-                    self._picam2 = None
+                if self._handle is picam2:
+                    self._handle = None
             if not self._stop.is_set() and not self._restart.is_set():
                 if self._stop.wait(backoff):
                     break
                 backoff = min(backoff * 2, 30)
+
+    # ── V4L2 / OpenCV backend ──────────────────────────────────────────────────
+
+    def _open_v4l2(self):
+        w, h = self.resolution
+        cap = cv2.VideoCapture(V4L2_DEVICE, cv2.CAP_V4L2)
+        if not cap.isOpened():
+            cap.release()
+            return None
+        cap.set(cv2.CAP_PROP_FOURCC,      cv2.VideoWriter_fourcc(*"MJPG"))
+        cap.set(cv2.CAP_PROP_FRAME_WIDTH,  w)
+        cap.set(cv2.CAP_PROP_FRAME_HEIGHT, h)
+        cap.set(cv2.CAP_PROP_FPS,          FPS)
+        cap.set(cv2.CAP_PROP_BUFFERSIZE,   1)
+        self.model = "C930e"
+        return cap
+
+    def _loop_v4l2(self):
+        backoff = 1
+        while not self._stop.is_set():
+            self._restart.clear()
+            cap = self._open_v4l2()
+            if cap is None:
+                if self._stop.wait(backoff):
+                    break
+                backoff = min(backoff * 2, 30)
+                continue
+            backoff = 1
+            with self.lock:
+                self._handle = cap
+            with cam_ctrl_lock:
+                self.apply_isp_controls(dict(cam_ctrl))
+            failures = 0
+            while not self._stop.is_set() and not self._restart.is_set():
+                ret, frame = cap.read()
+                if not ret or frame is None:
+                    failures += 1
+                    if failures >= 5:
+                        break
+                    time.sleep(0.05)
+                    continue
+                failures = 0
+                ok, buf = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, JPEG_QUALITY])
+                if ok:
+                    self.output.write(buf.tobytes())
+            cap.release()
+            with self.lock:
+                if self._handle is cap:
+                    self._handle = None
+            if not self._stop.is_set() and not self._restart.is_set():
+                if self._stop.wait(backoff):
+                    break
+                backoff = min(backoff * 2, 30)
+
+    # ── Shared entry point ─────────────────────────────────────────────────────
+
+    def _capture_loop(self):
+        if CAM_BACKEND == "picamera2":
+            self._loop_picamera2()
+        else:
+            self._loop_v4l2()
+
+    # ── Resolution change ──────────────────────────────────────────────────────
 
     def set_resolution(self, res_key):
         if res_key not in RESOLUTIONS or res_key == self.res_key:
@@ -216,6 +279,8 @@ class CameraManager:
             self.resolution = RESOLUTIONS[res_key]
         self._restart.set()
         return True
+
+    # ── Snapshot ───────────────────────────────────────────────────────────────
 
     def capture(self, prefix="Photo", filter_name="none", quality=85):
         ts = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
@@ -232,10 +297,6 @@ class CameraManager:
         buf = io.BytesIO()
         img.save(buf, format="JPEG", quality=quality)
         path.write_bytes(buf.getvalue())
-
-        # Post-processing: NR, CA correction, sharpening, grain.
-        # Timelapse frames: run in background so capture timing isn't blocked.
-        # Snapshots: run inline so the saved file is fully processed.
         if prefix == "tl":
             threading.Thread(
                 target=postprocess_jpeg, args=(path, quality),
@@ -243,82 +304,102 @@ class CameraManager:
             ).start()
         else:
             postprocess_jpeg(path, quality)
-
         return filename
 
-    def apply_isp_controls(self, c):
-        """Push picamera2 ISP controls to the camera module.
+    # ── ISP controls ───────────────────────────────────────────────────────────
 
-        picamera2 control ranges:
-          Brightness:        -1.0 to 1.0   (0.0 = neutral)
-          Saturation:         0.0 to 2.0   (1.0 = neutral)
-          Sharpness:          0.0 to 16.0  (1.0 = neutral)
-          Contrast:           0.0 to 32.0  (1.0 = neutral)
-          ExposureTime:       microseconds (requires AeEnable=False)
-          AnalogueGain:       float        (requires AeEnable=False)
-          AwbEnable:          bool
-          ColourTemperature:  2000-7500 K  (requires AwbEnable=False)
-        """
+    def apply_isp_controls(self, c):
         with self.lock:
-            picam2 = self._picam2
-        if picam2 is None:
+            handle = self._handle
+        if handle is None:
             return
+
+        if CAM_BACKEND == "picamera2":
+            self._isp_picamera2(handle, c)
+        else:
+            self._isp_v4l2(handle, c)
+
+    def _isp_picamera2(self, picam2, c):
+        """picamera2 ISP: Brightness −1…1, Saturation 0…2, Sharpness 0…16, Contrast 0…32."""
         try:
             controls = {}
-
-            # ── Exposure ──────────────────────────────────────────────────────
             exp = int(c.get("exposure_time", 0))
+            controls["AeEnable"]    = exp <= 0
             if exp > 0:
-                controls["AeEnable"] = False
                 controls["ExposureTime"] = exp
-            else:
-                controls["AeEnable"] = True
-
-            # ── Gain ──────────────────────────────────────────────────────────
             gain = float(c.get("analogue_gain", 0.0))
             if gain > 0:
                 controls["AnalogueGain"] = gain
-
-            # ── White balance ─────────────────────────────────────────────────
             if c.get("awb_mode", "auto") == "auto":
                 controls["AwbEnable"] = True
             else:
-                controls["AwbEnable"] = False
-                kelvin = max(2000, min(7500, int(c.get("awb_kelvin", 5600))))
-                controls["ColourTemperature"] = kelvin
-
-            # ── Brightness: UI −100…+100 → picamera2 −1.0…+1.0 ──────────────
-            b = int(c.get("brightness", 0))
-            controls["Brightness"] = max(-1.0, min(1.0, b / 100.0))
-
-            # ── Saturation: UI −100…+100 → picamera2 0.0…2.0 (neutral 1.0) ──
-            sat = int(c.get("saturation", 0))
-            controls["Saturation"] = max(0.0, min(2.0, 1.0 + sat / 100.0))
-
-            # ── Sharpness: UI 0–4 → picamera2 0.0–16.0 (neutral 1.0) ─────────
-            sharp = float(c.get("sharpness", 1.0))
-            controls["Sharpness"] = max(0.0, min(16.0, sharp))
-
-            # ── Contrast: UI 0–4 → picamera2 0.0–32.0 (neutral 1.0) ──────────
-            contrast = float(c.get("contrast", 1.0))
-            controls["Contrast"] = max(0.0, min(32.0, contrast))
-
+                controls["AwbEnable"]        = False
+                controls["ColourTemperature"] = max(2000, min(7500, int(c.get("awb_kelvin", 5600))))
+            controls["Brightness"] = max(-1.0, min(1.0,  int(c.get("brightness", 0)) / 100.0))
+            controls["Saturation"] = max( 0.0, min(2.0,  1.0 + int(c.get("saturation", 0)) / 100.0))
+            controls["Sharpness"]  = max( 0.0, min(16.0, float(c.get("sharpness", 1.0))))
+            controls["Contrast"]   = max( 0.0, min(32.0, float(c.get("contrast",  1.0))))
             picam2.set_controls(controls)
         except Exception:
             pass
+
+    def _isp_v4l2(self, cap, c):
+        """V4L2 ISP via OpenCV properties and v4l2-ctl for white balance."""
+        try:
+            exp = int(c.get("exposure_time", 0))
+            if exp > 0:
+                cap.set(cv2.CAP_PROP_AUTO_EXPOSURE, 1)
+                cap.set(cv2.CAP_PROP_EXPOSURE, max(3, exp // 100))
+            else:
+                cap.set(cv2.CAP_PROP_AUTO_EXPOSURE, 3)
+
+            gain = float(c.get("analogue_gain", 0.0))
+            if gain > 0:
+                cap.set(cv2.CAP_PROP_GAIN, int(min(255, max(0, gain / 16.0 * 255))))
+
+            if c.get("awb_mode", "auto") == "auto":
+                subprocess.run(
+                    ["v4l2-ctl", "-d", V4L2_DEVICE, "--set-ctrl=white_balance_automatic=1"],
+                    capture_output=True, check=False,
+                )
+            else:
+                kelvin = max(2000, min(7500, int(c.get("awb_kelvin", 5600))))
+                subprocess.run(
+                    ["v4l2-ctl", "-d", V4L2_DEVICE,
+                     f"--set-ctrl=white_balance_automatic=0,white_balance_temperature={kelvin}"],
+                    capture_output=True, check=False,
+                )
+
+            b = int(c.get("brightness", 0))
+            cap.set(cv2.CAP_PROP_BRIGHTNESS, max(0, min(255, 128 + b * 127 // 100)))
+            sat = int(c.get("saturation", 0))
+            cap.set(cv2.CAP_PROP_SATURATION, max(0, min(255, 128 + sat * 127 // 100)))
+            sharp = float(c.get("sharpness", 1.0))
+            sv = int(sharp * 128) if sharp <= 1.0 else int(128 + (sharp - 1.0) / 3.0 * 127)
+            cap.set(cv2.CAP_PROP_SHARPNESS, max(0, min(255, sv)))
+            contrast = float(c.get("contrast", 1.0))
+            cv_val = int(contrast * 128) if contrast <= 1.0 else int(128 + (contrast - 1.0) / 3.0 * 127)
+            cap.set(cv2.CAP_PROP_CONTRAST, max(0, min(255, cv_val)))
+        except Exception:
+            pass
+
+    # ── Shutdown ───────────────────────────────────────────────────────────────
 
     def stop(self):
         self._stop.set()
         self._restart.set()
         with self.lock:
-            picam2 = self._picam2
-            self._picam2 = None
-        if picam2 is not None:
-            try:
-                picam2.stop()
-                picam2.close()
-            except Exception:
-                pass
+            handle, self._handle = self._handle, None
+        if handle is None:
+            return
+        try:
+            if CAM_BACKEND == "picamera2":
+                handle.stop()
+                handle.close()
+            else:
+                handle.release()
+        except Exception:
+            pass
 
 
 camera = CameraManager()

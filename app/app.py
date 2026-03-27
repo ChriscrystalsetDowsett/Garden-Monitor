@@ -2,6 +2,8 @@
 import os
 from pathlib import Path
 
+import cv2
+import numpy as np
 from flask import Flask, Response, render_template, jsonify, request, send_from_directory
 
 from .config import SNAPSHOT_DIR, VIDEOS_DIR, CAM_CTRL_DEFAULTS
@@ -36,7 +38,34 @@ def index():
 
 @app.route("/stream")
 def stream():
-    return Response(gen_frames(), mimetype="multipart/x-mixed-replace; boundary=frame")
+    return Response(
+        gen_frames(),
+        mimetype="multipart/x-mixed-replace; boundary=frame",
+        headers={"X-Accel-Buffering": "no"},
+    )
+
+
+@app.route("/api/frame")
+def api_frame():
+    """Return the current JPEG for pull-based proxy streaming."""
+    with camera.output.condition:
+        camera.output.condition.wait(timeout=2)
+        frame = camera.output.frame
+    if not frame:
+        return "", 503
+    q = max(1, min(95, int(request.args.get("q", 85))))
+    if q < 83:  # re-encode only when meaningfully lower than camera default (85)
+        arr = np.frombuffer(frame, dtype=np.uint8)
+        img = cv2.imdecode(arr, cv2.IMREAD_COLOR)
+        if img is not None:
+            ok, enc = cv2.imencode(".jpg", img, [cv2.IMWRITE_JPEG_QUALITY, q])
+            if ok:
+                frame = enc.tobytes()
+    return Response(
+        frame,
+        mimetype="image/jpeg",
+        headers={"Cache-Control": "no-store, no-cache"},
+    )
 
 
 # ── Resolution ─────────────────────────────────────────────────────────────────

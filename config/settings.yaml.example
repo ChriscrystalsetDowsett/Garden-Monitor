@@ -11,6 +11,7 @@ server:
 
 camera:
   name: "my-pi"                   # identifies this feed — change per device (e.g. "Pi 4 Garden")
+  backend: "picamera2"            # "picamera2" for CSI camera modules; "v4l2" for USB webcams
   default_resolution: "1280x720"  # 640x480 | 1280x720 | 1920x1080
   hflip: false                    # flip image horizontally at startup
   vflip: false                    # flip image vertically at startup

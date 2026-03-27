@@ -440,6 +440,29 @@ header::after {
   50%       { opacity: 0.2; }
 }
 
+/* Quality toggle */
+.quality-bar {
+  display: flex;
+  gap: 6px;
+  padding: 10px 18px 4px;
+}
+.qual-btn {
+  flex: 1;
+  padding: 8px 10px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: var(--surface2);
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+.qual-btn:hover  { border-color: var(--green-dk); color: var(--text); }
+.qual-btn.active { background: var(--green-dk); border-color: var(--green); color: var(--green-lt); }
+
 /* In-drawer full controls link (mobile only) */
 .drawer-full-wrap {
   display: none;  /* shown via media query on mobile */
@@ -551,13 +574,13 @@ header::after {
     <div class="cam-tile"
          data-idx="{{ loop.index0 }}"
          data-name="{{ cam.name | e }}"
-         data-stream-url="http://{{ cam.host }}:{{ cam.port }}/stream"
-         data-full-url="http://{{ cam.host }}:{{ cam.port }}/"
+         data-stream-url="/dashboard/cam/{{ loop.index0 }}/proxy/stream"
+         data-full-url="/camera/{{ loop.index0 }}/"
          onclick="openDrawer(this)">
 
       <div class="tile-stream-wrap">
         <img class="tile-stream-img"
-             src="http://{{ cam.host }}:{{ cam.port }}/stream"
+             src="/dashboard/cam/{{ loop.index0 }}/proxy/stream?quality=low"
              alt="{{ cam.name | e }}"
              onload="markOnline(this)"
              onerror="markOffline(this)">
@@ -618,6 +641,12 @@ header::after {
     </button>
   </div>
 
+  <div class="quality-bar">
+    <button class="qual-btn" data-q="low"    onclick="setQuality('low')">Low</button>
+    <button class="qual-btn active" data-q="medium" onclick="setQuality('medium')">Med</button>
+    <button class="qual-btn" data-q="high"   onclick="setQuality('high')">High</button>
+  </div>
+
   <div class="drawer-full-wrap">
     <a id="drawer-full-btn" href="#" target="_blank" rel="noopener" class="drawer-full-btn">
       Open full controls →
@@ -637,11 +666,12 @@ header::after {
 
 /* ── State ─────────────────────────────────────────────────────────────────── */
 
-let activeIdx  = null;
-let recRunning = false;
-let tlRunning  = false;
-let pollTimer  = null;
-let toastTimer = null;
+let activeIdx     = null;
+let recRunning    = false;
+let tlRunning     = false;
+let pollTimer     = null;
+let toastTimer    = null;
+let streamQuality = 'medium';
 
 /* ── Online / offline indicators ────────────────────────────────────────────── */
 
@@ -669,7 +699,7 @@ function openDrawer(tile) {
   document.getElementById('drawer-title').textContent    = tile.dataset.name;
   document.getElementById('drawer-full-link').href       = tile.dataset.fullUrl;
   document.getElementById('drawer-full-btn').href        = tile.dataset.fullUrl;
-  document.getElementById('drawer-stream-img').src       = tile.dataset.streamUrl;
+  document.getElementById('drawer-stream-img').src       = tile.dataset.streamUrl + '?quality=' + streamQuality;
   document.getElementById('drawer-offline-msg').classList.remove('show');
   document.getElementById('drawer-status').textContent   = '';
 
@@ -847,6 +877,22 @@ async function toggleTimelapse() {
     showToast('Error controlling timelapse');
   } finally {
     btn.disabled = false;
+  }
+}
+
+/* ── Quality toggle ──────────────────────────────────────────────────────────── */
+
+function setQuality(q) {
+  streamQuality = q;
+  document.querySelectorAll('.qual-btn').forEach(b => {
+    b.classList.toggle('active', b.dataset.q === q);
+  });
+  if (activeIdx !== null) {
+    const tile = document.querySelector(`.cam-tile[data-idx="${activeIdx}"]`);
+    if (tile) {
+      document.getElementById('drawer-stream-img').src =
+        tile.dataset.streamUrl + '?quality=' + q;
+    }
   }
 }
 
