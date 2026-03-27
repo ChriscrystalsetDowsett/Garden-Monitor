@@ -1005,7 +1005,7 @@ input[type=range]:disabled::-webkit-slider-thumb { background: var(--dim); box-s
 
   <!-- ── Feed ── -->
   <div class="feed-wrap">
-    <img id="stream-img" src="/stream" alt="Live feed" onload="onStreamLoad()" onerror="onStreamError()">
+    <img id="stream-img" src="" alt="Live feed" onload="onStreamLoad()" onerror="onStreamError()">
     <div class="feed-overlay">
       <span class="feed-label">Live feed</span>
       <div style="position:relative">
@@ -1595,7 +1595,7 @@ let   tlDuration_    = 0;      // active duration in seconds (0 = unlimited)
 let   tlNextFrameAt_ = null;   // estimated epoch ms of next frame
 let   _tlPollMs      = 1000;   // adaptive: 1 s (fast interval) → 30 s (slow interval)
 let   statsTimer   = null;
-let   reconnTimer  = null;
+let   _tickTimer   = null;
 let   streamOnline = false;
 let   currentRes   = '1280x720';
 let   recording    = false;
@@ -1760,23 +1760,38 @@ document.addEventListener('click', function(e) {
 });
 
 // ── Stream ─────────────────────────────────────────────────────────────────────
+const _FRAME_MS = Math.round(1000 / 24);
+
+function _tick() {
+  document.getElementById('stream-img').src = '/api/frame?t=' + Date.now();
+}
+
 function onStreamLoad() {
   if (!streamOnline) {
     streamOnline = true;
-    clearTimeout(reconnTimer);
     setStatus(true);
   }
+  clearTimeout(_tickTimer);
+  _tickTimer = setTimeout(_tick, _FRAME_MS);
 }
 
 function onStreamError() {
   streamOnline = false;
   setStatus(false);
-  reconnTimer = setTimeout(reconnect, 4000);
+  clearTimeout(_tickTimer);
+  _tickTimer = setTimeout(_tick, 4000);
 }
 
 function reconnect() {
-  document.getElementById('stream-img').src = '/stream?' + Date.now();
+  clearTimeout(_tickTimer);
+  _tick();
 }
+
+document.addEventListener('visibilitychange', function () {
+  if (document.visibilityState === 'visible') reconnect();
+});
+
+_tick(); // start on page load
 
 function setStatus(online) {
   document.getElementById('status-dot').className  = 'dot' + (online ? ' online' : '');

@@ -580,7 +580,7 @@ header::after {
 
       <div class="tile-stream-wrap">
         <img class="tile-stream-img"
-             src="/dashboard/cam/{{ loop.index0 }}/proxy/stream?quality=low"
+             src="/dashboard/cam/{{ loop.index0 }}/proxy/stream?quality={{ tile_quality }}"
              alt="{{ cam.name | e }}"
              onload="markOnline(this)"
              onerror="markOffline(this)">

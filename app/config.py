@@ -33,7 +33,8 @@ if DEFAULT_RESOLUTION not in RESOLUTIONS:
 CAM_BACKEND = _cfg["camera"].get("backend", "picamera2")   # "picamera2" | "v4l2"
 
 # ── Dashboard camera list ─────────────────────────────────────────────────────
-CAMERAS = _cfg.get("cameras", [])
+CAMERAS      = _cfg.get("cameras", [])
+TILE_QUALITY = _cfg.get("dashboard", {}).get("tile_quality", "low")
 
 # ── libcamera constants ───────────────────────────────────────────────────────
 AWB_MODES = {

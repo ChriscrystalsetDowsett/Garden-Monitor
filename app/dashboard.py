@@ -2,9 +2,11 @@
 import re as _re
 import time as _time
 import requests as _requests
+import cv2 as _cv2
+import numpy as _np
 from flask import Blueprint, Response, jsonify, render_template, request, stream_with_context
 
-from .config import CAMERAS
+from .config import CAMERAS, TILE_QUALITY
 
 dashboard = Blueprint("dashboard", __name__)
 
@@ -28,7 +30,7 @@ def _cam_base(idx):
 
 @dashboard.route("/dashboard")
 def index():
-    return render_template("dashboard.html", cameras=CAMERAS)
+    return render_template("dashboard.html", cameras=CAMERAS, tile_quality=TILE_QUALITY)
 
 
 # ── Quick-action API proxy (used by dashboard JS) ──────────────────────────────
@@ -140,60 +142,50 @@ def _proxy(idx, path):
 
     # Pull-based MJPEG stream — fetches the latest frame on each tick.
     # This avoids frame-queue buildup that causes lag over the internet.
+    # Re-encoding at lower quality happens here so camera Pis stay stateless.
     if path == "stream":
         quality   = request.args.get("quality", "medium")
         fps, q    = _QUALITY.get(quality, _QUALITY["medium"])
         min_delay = 1.0 / fps
-        frame_url = f"{_cam_base(idx)}/api/frame?q={q}"
+        frame_url = f"{_cam_base(idx)}/api/frame"
 
-        push_url = f"{_cam_base(idx)}/stream"
+        def _encode(data):
+            """Re-encode JPEG at target quality if meaningfully below camera default."""
+            if q >= 83:
+                return data
+            arr = _np.frombuffer(data, dtype=_np.uint8)
+            img = _cv2.imdecode(arr, _cv2.IMREAD_COLOR)
+            if img is None:
+                return data
+            ok, enc = _cv2.imencode(".jpg", img, [_cv2.IMWRITE_JPEG_QUALITY, q])
+            return enc.tobytes() if ok else data
 
         def _generate():
             session = _requests.Session()
             try:
-                # Probe /api/frame — fall back to push /stream for old firmware
-                try:
-                    probe = session.get(frame_url, timeout=(_STREAM_CONNECT, 3))
-                except _requests.exceptions.RequestException:
-                    probe = None
-
-                if probe is not None and probe.status_code == 200 and probe.content:
-                    # ── Pull-based (new firmware) ──────────────────────────────
-                    yield (
-                        b"--frame\r\nContent-Type: image/jpeg\r\n\r\n"
-                        + probe.content + b"\r\n"
-                    )
-                    err_count = 0
-                    while True:
-                        t0 = _time.monotonic()
-                        try:
-                            r = session.get(frame_url, timeout=3)
-                            if r.status_code == 200 and r.content:
-                                yield (
-                                    b"--frame\r\nContent-Type: image/jpeg\r\n\r\n"
-                                    + r.content + b"\r\n"
-                                )
-                                err_count = 0
-                            else:
-                                err_count += 1
-                                _time.sleep(min(err_count, 5) * 0.5)
-                                continue
-                        except _requests.exceptions.RequestException:
+                err_count = 0
+                while True:
+                    t0 = _time.monotonic()
+                    try:
+                        r = session.get(frame_url, timeout=3)
+                        if r.status_code == 200 and r.content:
+                            yield (
+                                b"--frame\r\nContent-Type: image/jpeg\r\n\r\n"
+                                + _encode(r.content) + b"\r\n"
+                            )
+                            err_count = 0
+                        else:
                             err_count += 1
                             _time.sleep(min(err_count, 5) * 0.5)
                             continue
-                        elapsed = _time.monotonic() - t0
-                        gap = min_delay - elapsed
-                        if gap > 0:
-                            _time.sleep(gap)
-                else:
-                    # ── Push-based fallback (old firmware without /api/frame) ──
-                    with session.get(
-                        push_url, stream=True, timeout=(_STREAM_CONNECT, None)
-                    ) as r:
-                        for chunk in r.iter_content(chunk_size=4096):
-                            if chunk:
-                                yield chunk
+                    except _requests.exceptions.RequestException:
+                        err_count += 1
+                        _time.sleep(min(err_count, 5) * 0.5)
+                        continue
+                    elapsed = _time.monotonic() - t0
+                    gap = min_delay - elapsed
+                    if gap > 0:
+                        _time.sleep(gap)
             except Exception:
                 return
             finally:
