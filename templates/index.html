@@ -1076,7 +1076,7 @@ input[type=range]:disabled::-webkit-slider-thumb { background: var(--dim); box-s
   </header>
 
   <!-- ── Feed ── -->
-  <div class="feed-wrap">
+  <div class="feed-wrap" id="feed-wrap">
     <img id="stream-img" src="" alt="Live feed" onload="onStreamLoad()" onerror="onStreamError()">
     <div class="feed-overlay">
       <span class="feed-label">Live feed</span>
@@ -1842,19 +1842,25 @@ function _updateCamToggleBtn() {
 // ── Fullscreen ─────────────────────────────────────────────────────────────────
 
 function toggleFullscreen() {
-  if (!document.fullscreenElement) {
-    document.getElementById('feed-wrap').requestFullscreen().catch(() => {});
+  const el = document.getElementById('feed-wrap');
+  const inFS = !!(document.fullscreenElement || document.webkitFullscreenElement);
+  if (!inFS) {
+    if (el.requestFullscreen)       el.requestFullscreen().catch(() => {});
+    else if (el.webkitRequestFullscreen) el.webkitRequestFullscreen();
   } else {
-    document.exitFullscreen();
+    if (document.exitFullscreen)         document.exitFullscreen();
+    else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
   }
 }
 
-document.addEventListener('fullscreenchange', () => {
-  const inFS = !!document.fullscreenElement;
-  document.getElementById('fs-expand').style.display  = inFS ? 'none' : '';
-  document.getElementById('fs-collapse').style.display = inFS ? '' : 'none';
+function _onFSChange() {
+  const inFS = !!(document.fullscreenElement || document.webkitFullscreenElement);
+  document.getElementById('fs-expand').style.display   = inFS ? 'none' : '';
+  document.getElementById('fs-collapse').style.display = inFS ? ''     : 'none';
   document.getElementById('fs-btn').classList.toggle('active', inFS);
-});
+}
+document.addEventListener('fullscreenchange',       _onFSChange);
+document.addEventListener('webkitfullscreenchange', _onFSChange);
 
 // ── Camera info ────────────────────────────────────────────────────────────────
 const MODEL_NAMES = {
