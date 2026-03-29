@@ -454,7 +454,7 @@ input[type=range]:disabled::-webkit-slider-thumb { background: var(--dim); box-s
   position: absolute; bottom: 10px; right: 10px; z-index: 3;
 }
 
-/* When feed-wrap is the fullscreen element */
+/* When feed-wrap is the fullscreen element (real Fullscreen API) */
 .feed-wrap:fullscreen,
 .feed-wrap:-webkit-full-screen {
   border-radius: 0;
@@ -469,6 +469,30 @@ input[type=range]:disabled::-webkit-slider-thumb { background: var(--dim); box-s
 .feed-wrap:-webkit-full-screen img {
   width: 100vw;
   height: 100vh;
+  object-fit: contain;
+  aspect-ratio: unset;
+}
+
+/* iOS pseudo-fullscreen fallback (Fullscreen API not supported) */
+body.ios-fs {
+  overflow: hidden;
+}
+body.ios-fs #feed-wrap {
+  position: fixed;
+  inset: 0;
+  z-index: 500;
+  border-radius: 0;
+  width: 100dvw !important;
+  height: 100dvh !important;
+  max-width: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #000;
+}
+body.ios-fs #feed-wrap img {
+  width: 100dvw;
+  height: 100dvh;
   object-fit: contain;
   aspect-ratio: unset;
 }
@@ -1841,26 +1865,38 @@ function _updateCamToggleBtn() {
 
 // ── Fullscreen ─────────────────────────────────────────────────────────────────
 
+const _el = document.getElementById('feed-wrap');
+// iOS Safari does not support the Fullscreen API on arbitrary elements.
+const _supportsFS = !!(
+  _el.requestFullscreen || _el.webkitRequestFullscreen
+);
+let _iosFakeFS = false;
+
 function toggleFullscreen() {
-  const el = document.getElementById('feed-wrap');
-  const inFS = !!(document.fullscreenElement || document.webkitFullscreenElement);
-  if (!inFS) {
-    if (el.requestFullscreen)       el.requestFullscreen().catch(() => {});
-    else if (el.webkitRequestFullscreen) el.webkitRequestFullscreen();
+  if (_supportsFS) {
+    // Standard path — Chrome, Firefox, desktop Safari
+    const inFS = !!(document.fullscreenElement || document.webkitFullscreenElement);
+    if (!inFS) {
+      (_el.requestFullscreen || _el.webkitRequestFullscreen).call(_el).catch(() => {});
+    } else {
+      (document.exitFullscreen || document.webkitExitFullscreen).call(document);
+    }
   } else {
-    if (document.exitFullscreen)         document.exitFullscreen();
-    else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
+    // iOS fallback — pin the feed over the viewport with CSS
+    _iosFakeFS = !_iosFakeFS;
+    document.body.classList.toggle('ios-fs', _iosFakeFS);
+    _applyFSState(_iosFakeFS);
   }
 }
 
-function _onFSChange() {
-  const inFS = !!(document.fullscreenElement || document.webkitFullscreenElement);
+function _applyFSState(inFS) {
   document.getElementById('fs-expand').style.display   = inFS ? 'none' : '';
   document.getElementById('fs-collapse').style.display = inFS ? ''     : 'none';
   document.getElementById('fs-btn').classList.toggle('active', inFS);
 }
-document.addEventListener('fullscreenchange',       _onFSChange);
-document.addEventListener('webkitfullscreenchange', _onFSChange);
+
+document.addEventListener('fullscreenchange',       () => _applyFSState(!!(document.fullscreenElement || document.webkitFullscreenElement)));
+document.addEventListener('webkitfullscreenchange', () => _applyFSState(!!(document.fullscreenElement || document.webkitFullscreenElement)));
 
 // ── Camera info ────────────────────────────────────────────────────────────────
 const MODEL_NAMES = {
