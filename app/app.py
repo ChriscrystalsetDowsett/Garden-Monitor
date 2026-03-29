@@ -32,6 +32,8 @@ def index():
 @app.route("/api/frame")
 def api_frame():
     """Return the current JPEG frame (pull-based streaming)."""
+    if not camera.enabled:
+        return "", 503
     with camera.output.condition:
         camera.output.condition.wait(timeout=2)
         frame = camera.output.frame
@@ -42,6 +44,17 @@ def api_frame():
         mimetype="image/jpeg",
         headers={"Cache-Control": "no-store, no-cache"},
     )
+
+
+@app.route("/api/camera/enabled", methods=["GET"])
+def camera_enabled_get():
+    return jsonify({"enabled": camera.enabled})
+
+
+@app.route("/api/camera/enabled", methods=["POST"])
+def camera_enabled_set():
+    camera.set_enabled((request.json or {}).get("enabled", True))
+    return jsonify({"enabled": camera.enabled})
 
 
 # ── Resolution ─────────────────────────────────────────────────────────────────

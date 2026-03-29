@@ -179,8 +179,9 @@ header::after {
   letter-spacing: 0.6px;
   text-transform: uppercase;
 }
-.badge-rec { background: rgba(239,68,68,0.85); color: #fff; }
-.badge-tl  { background: rgba(217,119,6,0.85);  color: #fff; }
+.badge-rec    { background: rgba(239,68,68,0.85); color: #fff; }
+.badge-tl     { background: rgba(217,119,6,0.85);  color: #fff; }
+.badge-paused { background: rgba(75,85,99,0.85);   color: #fff; }
 
 /* Hover hint */
 .tile-hint {
@@ -451,6 +452,15 @@ header::after {
   color: var(--amber-lt);
 }
 
+/* Camera enable/disable button */
+.cam-enable-btn:hover { border-color: rgba(34,197,94,0.45); }
+.cam-enable-btn.off {
+  background: rgba(239,68,68,0.08);
+  border-color: rgba(239,68,68,0.4);
+  color: var(--red);
+}
+.cam-enable-btn.off:hover { border-color: var(--red); }
+
 @keyframes blink {
   0%, 100% { opacity: 1; }
   50%       { opacity: 0.2; }
@@ -634,6 +644,16 @@ header::after {
       <span class="btn-main">⏱ <span id="tl-label">Timelapse</span></span>
       <span class="btn-hint">30 min · 10s</span>
     </button>
+    <button class="action-btn cam-enable-btn" id="btn-cam-toggle" onclick="toggleCameraEnabled()">
+      <span class="btn-main">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M18.36 6.64a9 9 0 1 1-12.73 0"/>
+          <line x1="12" y1="2" x2="12" y2="12"/>
+        </svg>
+        <span id="cam-enable-label">Camera</span>
+      </span>
+      <span class="btn-hint" id="cam-enable-hint">Enabled</span>
+    </button>
   </div>
 
   <div class="drawer-full-wrap">
@@ -658,6 +678,7 @@ header::after {
 let activeIdx     = null;
 let recRunning    = false;
 let tlRunning     = false;
+let camEnabled    = true;
 let pollTimer     = null;
 let toastTimer    = null;
 // Pull-based stream (iOS Safari compatible — MJPEG is not supported in Safari)
@@ -743,7 +764,9 @@ function openDrawer(tile) {
 
   recRunning = false;
   tlRunning  = false;
+  camEnabled = true;
   updateButtons();
+  updateCamToggle();
   setActionsDisabled(false);
 
   document.getElementById('drawer-backdrop').classList.add('visible');
@@ -777,9 +800,10 @@ function closeDrawer() {
 async function fetchStatus() {
   if (activeIdx === null) return;
   try {
-    const [recResp, tlResp] = await Promise.all([
+    const [recResp, tlResp, camResp] = await Promise.all([
       camFetch(activeIdx, 'api/record/status'),
       camFetch(activeIdx, 'api/timelapse/status'),
+      camFetch(activeIdx, 'api/camera/enabled'),
     ]);
 
     if (!recResp.ok || !tlResp.ok) { setOffline(true); return; }
@@ -789,10 +813,16 @@ async function fetchStatus() {
 
     if (rec.error || tl.error) { setOffline(true); return; }
 
+    if (camResp.ok) {
+      const camData = await camResp.json();
+      camEnabled = camData.enabled !== false;
+    }
+
     setOffline(false);
     recRunning = rec.running || false;
     tlRunning  = tl.running  || false;
     updateButtons();
+    updateCamToggle();
     updateTileBadges(activeIdx);
     updateStatusText(rec, tl);
   } catch {
@@ -809,7 +839,7 @@ function setOffline(offline) {
 }
 
 function setActionsDisabled(disabled) {
-  ['btn-photo', 'btn-record', 'btn-timelapse'].forEach(id => {
+  ['btn-photo', 'btn-record', 'btn-timelapse', 'btn-cam-toggle'].forEach(id => {
     document.getElementById(id).disabled = disabled;
   });
 }
@@ -830,6 +860,13 @@ function updateTileBadges(idx) {
   const el = document.getElementById('tile-badges-' + idx);
   if (!el) return;
   el.innerHTML = '';
+  if (!camEnabled) {
+    const b = document.createElement('span');
+    b.className   = 'status-badge badge-paused';
+    b.textContent = '⏸ Paused';
+    el.appendChild(b);
+    return;
+  }
   if (recRunning) {
     const b = document.createElement('span');
     b.className   = 'status-badge badge-rec';
@@ -841,6 +878,33 @@ function updateTileBadges(idx) {
     b.className   = 'status-badge badge-tl';
     b.textContent = '⏱ TL';
     el.appendChild(b);
+  }
+}
+
+function updateCamToggle() {
+  const btn  = document.getElementById('btn-cam-toggle');
+  const hint = document.getElementById('cam-enable-hint');
+  btn.classList.toggle('off', !camEnabled);
+  hint.textContent = camEnabled ? 'Enabled' : 'Paused';
+}
+
+async function toggleCameraEnabled() {
+  if (activeIdx === null) return;
+  const btn = document.getElementById('btn-cam-toggle');
+  btn.disabled = true;
+  try {
+    const resp = await camFetch(activeIdx, 'api/camera/enabled', 'POST', { enabled: !camEnabled });
+    const data = await resp.json();
+    if (!data.error) {
+      camEnabled = data.enabled !== false;
+      updateCamToggle();
+      updateTileBadges(activeIdx);
+      showToast(camEnabled ? '📷 Camera enabled' : '⏸ Camera paused');
+    }
+  } catch {
+    showToast('Failed to toggle camera');
+  } finally {
+    btn.disabled = false;
   }
 }
 

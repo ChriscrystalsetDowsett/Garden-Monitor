@@ -146,7 +146,12 @@ class CameraManager:
         self._restart   = threading.Event()
         # Backend-specific handle (cv2.VideoCapture or Picamera2 instance)
         self._handle    = None
+        # Stream enable/disable — hardware keeps running, frames just aren't served
+        self.enabled    = True
         threading.Thread(target=self._capture_loop, daemon=True, name="capture").start()
+
+    def set_enabled(self, value: bool) -> None:
+        self.enabled = bool(value)
 
     # ── picamera2 backend ──────────────────────────────────────────────────────
 
