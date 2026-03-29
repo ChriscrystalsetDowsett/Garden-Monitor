@@ -448,6 +448,30 @@ input[type=range]:disabled::-webkit-slider-thumb { background: var(--dim); box-s
   position: absolute; bottom: 10px; left: 10px; z-index: 3;
   display: flex; gap: 5px;
 }
+
+/* Fullscreen button — bottom-right corner */
+#fs-btn {
+  position: absolute; bottom: 10px; right: 10px; z-index: 3;
+}
+
+/* When feed-wrap is the fullscreen element */
+.feed-wrap:fullscreen,
+.feed-wrap:-webkit-full-screen {
+  border-radius: 0;
+  width: 100vw !important;
+  height: 100vh !important;
+  max-width: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.feed-wrap:fullscreen img,
+.feed-wrap:-webkit-full-screen img {
+  width: 100vw;
+  height: 100vh;
+  object-fit: contain;
+  aspect-ratio: unset;
+}
 .flip-btn {
   display: inline-flex; align-items: center; gap: 5px;
   background: rgba(4,10,4,0.72);
@@ -1096,6 +1120,21 @@ input[type=range]:disabled::-webkit-slider-thumb { background: var(--dim); box-s
         V-Flip
       </button>
     </div>
+    <button class="flip-btn" id="fs-btn" onclick="toggleFullscreen()" title="Toggle fullscreen">
+      <svg id="fs-expand" width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+        <polyline points="10 2 14 2 14 6"/>
+        <polyline points="6 14 2 14 2 10"/>
+        <line x1="14" y1="2" x2="9" y2="7"/>
+        <line x1="2" y1="14" x2="7" y2="9"/>
+      </svg>
+      <svg id="fs-collapse" width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="display:none">
+        <polyline points="14 10 10 10 10 14"/>
+        <polyline points="2 6 6 6 6 2"/>
+        <line x1="10" y1="10" x2="15" y2="15"/>
+        <line x1="6" y1="6" x2="1" y2="1"/>
+      </svg>
+      Fullscreen
+    </button>
   </div>
 
   <!-- ── Action buttons + all panels below live in .inner-content ── -->
@@ -1799,6 +1838,23 @@ function _updateCamToggleBtn() {
   btn.classList.toggle('off', !camEnabled);
   lbl.textContent = camEnabled ? 'Camera On' : 'Camera Off';
 }
+
+// ── Fullscreen ─────────────────────────────────────────────────────────────────
+
+function toggleFullscreen() {
+  if (!document.fullscreenElement) {
+    document.getElementById('feed-wrap').requestFullscreen().catch(() => {});
+  } else {
+    document.exitFullscreen();
+  }
+}
+
+document.addEventListener('fullscreenchange', () => {
+  const inFS = !!document.fullscreenElement;
+  document.getElementById('fs-expand').style.display  = inFS ? 'none' : '';
+  document.getElementById('fs-collapse').style.display = inFS ? '' : 'none';
+  document.getElementById('fs-btn').classList.toggle('active', inFS);
+});
 
 // ── Camera info ────────────────────────────────────────────────────────────────
 const MODEL_NAMES = {
