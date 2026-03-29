@@ -283,7 +283,9 @@ class CameraManager:
     # ── Snapshot ───────────────────────────────────────────────────────────────
 
     def capture(self, prefix="Photo", filter_name="none", quality=85):
-        ts = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+        now     = datetime.now()
+        ts      = now.strftime("%Y-%m-%d_%H-%M-%S")
+        exif_dt = now.strftime("%Y:%m:%d %H:%M:%S")
         filename = f"{prefix}_{ts}.jpg"
         path = SNAPSHOT_DIR / filename
         with self.output.condition:
@@ -297,13 +299,28 @@ class CameraManager:
         buf = io.BytesIO()
         img.save(buf, format="JPEG", quality=quality)
         path.write_bytes(buf.getvalue())
+
+        with cam_ctrl_lock:
+            ctrl = dict(cam_ctrl)
+        meta = {
+            "datetime":     exif_dt,
+            "make":         "Raspberry Pi" if CAM_BACKEND == "picamera2" else "Logitech",
+            "model":        self.model,
+            "description":  "Garden Monitor Timelapse Frame" if prefix == "tl"
+                            else "Garden Monitor Photo",
+            "hflip":        ctrl.get("hflip", False),
+            "vflip":        ctrl.get("vflip", False),
+            "exposure_mode": 1 if ctrl.get("exposure_time", 0) > 0 else 0,
+            "white_balance": 1 if ctrl.get("awb_mode", "auto") != "auto" else 0,
+        }
+
         if prefix == "tl":
             threading.Thread(
                 target=postprocess_jpeg, args=(path, quality),
-                kwargs={"fast": True}, daemon=True
+                kwargs={"fast": True, "metadata": meta}, daemon=True
             ).start()
         else:
-            postprocess_jpeg(path, quality)
+            postprocess_jpeg(path, quality, metadata=meta)
         return filename
 
     # ── ISP controls ───────────────────────────────────────────────────────────

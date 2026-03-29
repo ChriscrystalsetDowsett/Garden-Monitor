@@ -16,8 +16,11 @@ def compile_timelapse_to_video(files, output_name=None):
     files = sorted(str(f) for f in files)
     if not files:
         return None
-    ts        = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+    now       = datetime.now()
+    ts        = now.strftime("%Y-%m-%d_%H-%M-%S")
+    iso_ts    = now.strftime("%Y-%m-%dT%H:%M:%S")
     out_name  = output_name or f"Timelapse_{ts}.mp4"
+    out_stem  = out_name.removesuffix(".mp4")
     out_path  = VIDEOS_DIR / out_name
     list_path = VIDEOS_DIR / f"_tl_list_{ts}.txt"
     with _compile_lock:
@@ -30,6 +33,10 @@ def compile_timelapse_to_video(files, output_name=None):
             ["ffmpeg", "-y",
              "-f", "concat", "-safe", "0", "-i", str(list_path),
              "-r", "24", "-c:v", "libx264", "-pix_fmt", "yuv420p", "-crf", "23",
+             "-metadata", f"creation_time={iso_ts}",
+             "-metadata", f"title={out_stem}",
+             "-metadata", "comment=Garden Monitor Timelapse",
+             "-metadata", "encoder=Garden Monitor",
              str(out_path)],
             capture_output=True, timeout=600,
         )

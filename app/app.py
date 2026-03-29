@@ -14,7 +14,11 @@ from .dashboard import dashboard as dashboard_bp
 # Wire the recorder into the camera stream so it captures what the user sees
 camera.output.recorder = video_recorder
 
-app = Flask(__name__, template_folder=str(Path(__file__).parent.parent / "templates"))
+app = Flask(
+    __name__,
+    template_folder=str(Path(__file__).parent.parent / "templates"),
+    static_folder=str(Path(__file__).parent.parent / "static"),
+)
 app.register_blueprint(dashboard_bp)
 
 
@@ -122,8 +126,10 @@ def tl_compile_status():
 
 @app.route("/api/record/start", methods=["POST"])
 def record_start():
-    crf = (request.json or {}).get("quality", 23)
-    ok  = video_recorder.start(crf=int(crf))
+    data  = request.json or {}
+    crf   = int(data.get("quality", 23))
+    audio = bool(data.get("audio", False))
+    ok    = video_recorder.start(crf=crf, audio=audio)
     return jsonify({"ok": ok, **video_recorder.status()})
 
 
@@ -155,6 +161,17 @@ def list_videos():
 @app.route("/videos/<filename>")
 def serve_video(filename):
     return send_from_directory(VIDEOS_DIR, filename)
+
+
+@app.route("/api/videos/<filename>", methods=["DELETE"])
+def delete_video(filename):
+    if "/" in filename or ".." in filename:
+        return jsonify({"ok": False}), 400
+    path = VIDEOS_DIR / filename
+    if not path.exists():
+        return jsonify({"ok": False}), 404
+    path.unlink()
+    return jsonify({"ok": True})
 
 
 # ── Camera controls ────────────────────────────────────────────────────────────

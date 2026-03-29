@@ -59,13 +59,71 @@ def _unsharp_mask(l_channel: np.ndarray) -> np.ndarray:
     return np.clip(sharpened, 0, 255).astype(np.uint8)
 
 
+# ── EXIF builder ─────────────────────────────────────────────────────────────
+def _build_exif_bytes(metadata: dict, width: int, height: int):
+    """Build a piexif EXIF blob from a capture metadata dict. Returns None on failure."""
+    if not _PIEXIF_OK or not metadata:
+        return None
+    try:
+        def _enc(v):
+            return v.encode() if isinstance(v, str) else (v or b"")
+
+        dt    = _enc(metadata.get("datetime", ""))
+        make  = _enc(metadata.get("make",  ""))
+        model = _enc(metadata.get("model", ""))
+        desc  = _enc(metadata.get("description", ""))
+
+        hflip = metadata.get("hflip", False)
+        vflip = metadata.get("vflip", False)
+        orientation = {
+            (False, False): 1,   # normal
+            (True,  False): 2,   # mirror horizontal
+            (False, True):  4,   # mirror vertical
+            (True,  True):  3,   # rotate 180°
+        }.get((bool(hflip), bool(vflip)), 1)
+
+        zeroth = {
+            _piexif.ImageIFD.Make:           make,
+            _piexif.ImageIFD.Model:          model,
+            _piexif.ImageIFD.Software:       b"Garden Monitor",
+            _piexif.ImageIFD.Orientation:    orientation,
+            _piexif.ImageIFD.XResolution:    (72, 1),
+            _piexif.ImageIFD.YResolution:    (72, 1),
+            _piexif.ImageIFD.ResolutionUnit: 2,   # inches
+        }
+        if dt:
+            zeroth[_piexif.ImageIFD.DateTime]         = dt
+        if desc:
+            zeroth[_piexif.ImageIFD.ImageDescription] = desc
+
+        exif_ifd = {
+            _piexif.ExifIFD.ExifVersion:      b"0231",
+            _piexif.ExifIFD.FlashPixVersion:  b"0100",
+            _piexif.ExifIFD.ColorSpace:       1,            # sRGB
+            _piexif.ExifIFD.PixelXDimension:  width,
+            _piexif.ExifIFD.PixelYDimension:  height,
+            _piexif.ExifIFD.ExposureMode:     metadata.get("exposure_mode", 0),  # 0=auto 1=manual
+            _piexif.ExifIFD.WhiteBalance:     metadata.get("white_balance", 0),  # 0=auto 1=manual
+            _piexif.ExifIFD.SceneCaptureType: 0,            # standard
+        }
+        if dt:
+            exif_ifd[_piexif.ExifIFD.DateTimeOriginal]  = dt
+            exif_ifd[_piexif.ExifIFD.DateTimeDigitized] = dt
+
+        return _piexif.dump({"0th": zeroth, "Exif": exif_ifd, "GPS": {}, "1st": {}})
+    except Exception:
+        return None
+
+
 # ── Public entry point ────────────────────────────────────────────────────────
-def postprocess_jpeg(path: Path, quality: int = 92, fast: bool = False) -> None:
+def postprocess_jpeg(path: Path, quality: int = 92, fast: bool = False,
+                     metadata: dict = None) -> None:
     """
     Load *path*, apply the post-processing pipeline, overwrite *path* in place.
     Silently no-ops on any error so it never breaks capture flow.
 
     fast=True skips sharpening for timelapse frames where throughput matters.
+    metadata, if provided, is written as EXIF into the saved image.
     """
     try:
         path = Path(path)
@@ -91,16 +149,17 @@ def postprocess_jpeg(path: Path, quality: int = 92, fast: bool = False) -> None:
         if not fast:
             l = _unsharp_mask(l)
 
-        # ── 4. Merge and save, preserving EXIF ──────────────────────────────
+        # ── 4. Merge and save with EXIF ──────────────────────────────────────
         lab_out = cv2.merge([l, a, b_ch])
         bgr_out = cv2.cvtColor(lab_out, cv2.COLOR_LAB2BGR)
+        h, w    = bgr_out.shape[:2]
         ok, buf = cv2.imencode(".jpg", bgr_out, [cv2.IMWRITE_JPEG_QUALITY, quality])
         if ok:
             raw_bytes = buf.tobytes()
-            if _PIEXIF_OK:
+            exif_blob = _build_exif_bytes(metadata, w, h)
+            if exif_blob:
                 try:
-                    exif_bytes = _piexif.load(str(path))
-                    raw_bytes  = _piexif.insert(_piexif.dump(exif_bytes), raw_bytes)
+                    raw_bytes = _piexif.insert(exif_blob, raw_bytes)
                 except Exception:
                     pass
             path.write_bytes(raw_bytes)

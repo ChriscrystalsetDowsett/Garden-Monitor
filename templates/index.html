@@ -3,6 +3,10 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Garden Cams">
+<link rel="apple-touch-icon" sizes="180x180" href="/static/icon-180.png">
 <title>Home Garden Cameras</title>
 <style>
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -264,6 +268,11 @@ header::after {
   background: #431407; color: #fca5a5;
   border: 1px solid #7f1d1d;
 }
+.btn-reset {
+  background: var(--surface2); color: var(--amber-lt);
+  border: 1px solid rgba(217,119,6,0.35);
+}
+.btn-reset:hover { border-color: var(--amber); }
 
 /* recording button */
 .btn-rec {
@@ -566,25 +575,30 @@ input[type=range]:disabled::-webkit-slider-thumb { background: var(--dim); box-s
 
 .section-bar {
   width: 100%; display: flex; align-items: center;
-  justify-content: center;
+  justify-content: space-between;
   padding: 12px 16px;
   background: var(--surface2);
   border: none; border-bottom: 1px solid var(--border);
   cursor: pointer; color: var(--text);
   font-family: inherit; user-select: none;
-  position: relative;
   transition: background 0.2s;
 }
 .section-bar:hover { background: rgba(255,255,255,0.04); }
 
+.section-bar-spacer {
+  flex: 1;
+}
+
 .section-bar-title {
   font-size: 11.5px; font-weight: 600;
   letter-spacing: 0.09em; text-transform: uppercase; color: var(--dim);
+  flex-shrink: 0;
 }
 
 .section-bar-right {
-  position: absolute; right: 16px;
-  display: flex; align-items: center; gap: 9px;
+  flex: 1;
+  display: flex; align-items: center; justify-content: flex-end; gap: 9px;
+  min-width: 0;
 }
 
 .section-body {
@@ -607,20 +621,22 @@ input[type=range]:disabled::-webkit-slider-thumb { background: var(--dim); box-s
   display: grid;
   grid-template-columns: repeat(4, 1fr);
   gap: 10px;
-  margin-bottom: 12px;
+  margin-bottom: 11px;
 }
 
 .gauge-card {
-  display: flex; flex-direction: column; align-items: center;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
   background: var(--surface2);
   border: 1px solid var(--border);
   border-radius: 10px;
-  padding: 14px 6px 10px;
+  padding: 14px 8px 11px;
   gap: 6px;
 }
 
 .gauge-svg {
-  width: 88px; height: 88px;
+  width: 100%;
+  max-width: 104px;
+  aspect-ratio: 1;
   overflow: visible;
 }
 
@@ -644,7 +660,7 @@ input[type=range]:disabled::-webkit-slider-thumb { background: var(--dim); box-s
 }
 
 .gauge-val {
-  font-size: 19px; font-weight: 700;
+  font-size: 18px; font-weight: 700;
   fill: var(--text);
   text-anchor: middle;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
@@ -657,29 +673,29 @@ input[type=range]:disabled::-webkit-slider-thumb { background: var(--dim); box-s
 }
 
 .gauge-title {
-  font-size: 11px; font-weight: 600; letter-spacing: 0.07em;
-  color: var(--dim); text-transform: uppercase;
+  font-size: 10px; font-weight: 600; letter-spacing: 0.07em;
+  color: var(--dim); text-transform: uppercase; text-align: center;
 }
 
 .gauge-sub {
-  font-size: 11px; color: var(--muted); letter-spacing: 0.01em;
-  margin-top: -2px;
+  font-size: 10px; color: var(--muted); letter-spacing: 0.01em;
+  text-align: center; margin-top: -4px;
 }
 
 .gauge-disk-chips {
   display: flex; width: 100%;
   border-top: 1px solid var(--border);
-  padding-top: 7px; margin-top: 0;
+  padding-top: 7px; margin-top: 2px;
 }
 .gauge-disk-chip {
   flex: 1; display: flex; flex-direction: column; align-items: center; gap: 3px;
 }
 .gauge-disk-lbl {
-  font-size: 9px; color: var(--dim);
+  font-size: 8px; color: var(--dim);
   text-transform: uppercase; letter-spacing: 0.07em;
 }
 .gauge-disk-val {
-  font-size: 11px; font-weight: 600; color: var(--muted);
+  font-size: 10px; font-weight: 600; color: var(--muted);
 }
 
 /* Info chips row */
@@ -688,22 +704,23 @@ input[type=range]:disabled::-webkit-slider-thumb { background: var(--dim); box-s
 }
 
 .info-chip {
-  display: flex; flex-direction: column; align-items: center;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
   background: var(--surface2);
   border: 1px solid var(--border);
   border-radius: 8px;
-  padding: 8px 14px;
-  flex: 1; min-width: 72px;
+  padding: 10px 13px;
+  flex: 1; min-width: 64px;
+  text-align: center;
 }
 
 .info-chip-label {
-  font-size: 10px; color: var(--dim);
+  font-size: 11px; color: var(--dim);
   font-weight: 600; text-transform: uppercase; letter-spacing: 0.07em;
   white-space: nowrap;
 }
 
 .info-chip-val {
-  font-size: 13px; font-weight: 600;
+  font-size: 15px; font-weight: 600;
   color: var(--text); margin-top: 4px;
   white-space: nowrap;
 }
@@ -713,19 +730,19 @@ input[type=range]:disabled::-webkit-slider-thumb { background: var(--dim); box-s
   background: var(--surface2);
   border: 1px solid var(--border);
   border-radius: 8px;
-  padding: 8px 14px 9px;
+  padding: 10px 13px;
   display: flex; flex-direction: column; gap: 7px;
-  flex: 2; min-width: 210px;
+  flex: 2; min-width: 170px;
 }
 .wifi-card-title {
   font-size: 10px; font-weight: 600; letter-spacing: 0.07em;
-  text-transform: uppercase; color: var(--dim);
+  text-transform: uppercase; color: var(--dim); text-align: center;
 }
 .wifi-traffic-row {
   display: flex; align-items: center;
 }
 .wifi-traffic-item {
-  flex: 1; display: flex; flex-direction: column; gap: 2px;
+  flex: 1; display: flex; flex-direction: column; align-items: center; gap: 2px;
 }
 .wifi-traffic-val {
   font-size: 15px; font-weight: 700; color: var(--text); white-space: nowrap;
@@ -734,7 +751,7 @@ input[type=range]:disabled::-webkit-slider-thumb { background: var(--dim); box-s
   font-size: 10px; color: var(--muted);
 }
 .wifi-traffic-divider {
-  width: 1px; background: var(--border); align-self: stretch; margin: 0 14px;
+  width: 1px; background: var(--border); align-self: stretch; margin: 0 11px;
 }
 .wifi-meta-row {
   display: flex;
@@ -742,7 +759,7 @@ input[type=range]:disabled::-webkit-slider-thumb { background: var(--dim); box-s
   padding-top: 7px;
 }
 .wifi-meta-item {
-  flex: 1; display: flex; flex-direction: column; gap: 2px;
+  flex: 1; display: flex; flex-direction: column; align-items: center; gap: 2px;
 }
 .wifi-meta-lbl {
   font-size: 9px; color: var(--dim);
@@ -778,6 +795,7 @@ input[type=range]:disabled::-webkit-slider-thumb { background: var(--dim); box-s
 /* ── Inline gallery ──────────────────────────────────────────────── */
 .gallery-count {
   font-size: 12px; color: var(--dim); font-weight: 400;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0;
 }
 
 .gallery-grid {
@@ -1070,6 +1088,10 @@ input[type=range]:disabled::-webkit-slider-thumb { background: var(--dim); box-s
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="5" r="1.5"/><line x1="12" y1="2" x2="12" y2="3.5"/><line x1="12" y1="6.5" x2="12" y2="22"/><circle cx="6" cy="12" r="1.5"/><line x1="6" y1="2" x2="6" y2="10.5"/><line x1="6" y1="13.5" x2="6" y2="22"/><circle cx="18" cy="17" r="1.5"/><line x1="18" y1="2" x2="18" y2="15.5"/><line x1="18" y1="18.5" x2="18" y2="22"/></svg>
       Controls
     </button>
+    <button class="btn btn-reset" onclick="resetCtrlDefaults()" title="Reset all filters and controls to defaults">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
+      Reset All
+    </button>
   </div>
 
   <!-- ── Snapshot settings panel ── -->
@@ -1101,6 +1123,14 @@ input[type=range]:disabled::-webkit-slider-thumb { background: var(--dim); box-s
       <button class="res-opt" data-crf="18" onclick="setRecQuality(this)">High</button>
       <button class="res-opt active" data-crf="23" onclick="setRecQuality(this)">Medium</button>
       <button class="res-opt" data-crf="28" onclick="setRecQuality(this)">Low</button>
+    </div>
+    <hr class="tl-divider">
+    <div class="section-label" style="margin-bottom:10px">Audio</div>
+    <div class="res-buttons">
+      <button class="res-opt" id="mic-btn" onclick="toggleMic()">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a3 3 0 0 1 3 3v7a3 3 0 0 1-6 0V5a3 3 0 0 1 3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="22"/></svg>
+        Microphone Off
+      </button>
     </div>
     <hr class="tl-divider">
     <button class="btn btn-rec" style="width:100%;justify-content:center" id="rec-start-btn" onclick="startRecording()">
@@ -1442,17 +1472,18 @@ input[type=range]:disabled::-webkit-slider-thumb { background: var(--dim); box-s
   <!-- ── Gallery ── -->
   <div class="section-card">
     <button class="section-bar" onclick="toggleSection('gallery')">
+      <span class="section-bar-spacer"></span>
       <span class="section-bar-title">Gallery</span>
       <div class="section-bar-right">
         <span class="gallery-count" id="gallery-count"></span>
         <svg id="gallery-chevron" width="10" height="6" viewBox="0 0 10 6" fill="none"
              stroke="rgba(255,255,255,0.45)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"
-             style="transform:rotate(180deg);transition:transform 0.35s cubic-bezier(0.4,0,0.2,1);flex-shrink:0">
+             style="transform:rotate(0deg);transition:transform 0.35s cubic-bezier(0.4,0,0.2,1);flex-shrink:0">
           <polyline points="1 1 5 5 9 1"/>
         </svg>
       </div>
     </button>
-    <div class="section-body" id="gallery-body">
+    <div class="section-body sec-closed" id="gallery-body">
       <div class="gallery-grid" id="gallery-grid">
         <div class="gallery-empty">No snapshots yet</div>
       </div>
@@ -1469,6 +1500,7 @@ input[type=range]:disabled::-webkit-slider-thumb { background: var(--dim); box-s
   <!-- ── System Stats ── -->
   <div class="section-card">
     <button class="section-bar" onclick="toggleSection('stats')">
+      <span class="section-bar-spacer"></span>
       <span class="section-bar-title">System Stats</span>
       <div class="section-bar-right">
         <svg id="stats-chevron" width="10" height="6" viewBox="0 0 10 6" fill="none"
@@ -1484,8 +1516,8 @@ input[type=range]:disabled::-webkit-slider-thumb { background: var(--dim); box-s
           <svg class="gauge-svg" viewBox="0 0 100 100">
             <circle class="gauge-track" cx="50" cy="50" r="38"/>
             <circle class="gauge-arc" id="arc-cpu" cx="50" cy="50" r="38"/>
-            <text class="gauge-val" id="gv-cpu" x="50" y="47">0</text>
-            <text class="gauge-unit" x="50" y="60">%</text>
+            <text class="gauge-val" id="gv-cpu" x="50" y="49">0</text>
+            <text class="gauge-unit" x="50" y="63">%</text>
           </svg>
           <span class="gauge-title">CPU</span>
         </div>
@@ -1493,8 +1525,8 @@ input[type=range]:disabled::-webkit-slider-thumb { background: var(--dim); box-s
           <svg class="gauge-svg" viewBox="0 0 100 100">
             <circle class="gauge-track" cx="50" cy="50" r="38"/>
             <circle class="gauge-arc" id="arc-ram" cx="50" cy="50" r="38"/>
-            <text class="gauge-val" id="gv-ram" x="50" y="47">0</text>
-            <text class="gauge-unit" x="50" y="60">%</text>
+            <text class="gauge-val" id="gv-ram" x="50" y="49">0</text>
+            <text class="gauge-unit" x="50" y="63">%</text>
           </svg>
           <span class="gauge-title">RAM</span>
           <span class="gauge-sub" id="ic-ram-usage">— / —</span>
@@ -1503,8 +1535,8 @@ input[type=range]:disabled::-webkit-slider-thumb { background: var(--dim); box-s
           <svg class="gauge-svg" viewBox="0 0 100 100">
             <circle class="gauge-track" cx="50" cy="50" r="38"/>
             <circle class="gauge-arc" id="arc-temp" cx="50" cy="50" r="38"/>
-            <text class="gauge-val" id="gv-temp" x="50" y="47">&mdash;</text>
-            <text class="gauge-unit" x="50" y="60">&deg;C</text>
+            <text class="gauge-val" id="gv-temp" x="50" y="49">&mdash;</text>
+            <text class="gauge-unit" x="50" y="63">&deg;C</text>
           </svg>
           <span class="gauge-title">Temp</span>
         </div>
@@ -1512,8 +1544,8 @@ input[type=range]:disabled::-webkit-slider-thumb { background: var(--dim); box-s
           <svg class="gauge-svg" viewBox="0 0 100 100">
             <circle class="gauge-track" cx="50" cy="50" r="38"/>
             <circle class="gauge-arc" id="arc-disk" cx="50" cy="50" r="38"/>
-            <text class="gauge-val" id="gv-disk" x="50" y="47">0</text>
-            <text class="gauge-unit" x="50" y="60">%</text>
+            <text class="gauge-val" id="gv-disk" x="50" y="49">0</text>
+            <text class="gauge-unit" x="50" y="63">%</text>
           </svg>
           <span class="gauge-title">Disk</span>
           <div class="gauge-disk-chips">
@@ -1608,6 +1640,7 @@ let   ctrlPanelOpen   = false;
 let   filterPanelOpen = false;
 let   resDDOpen    = false;
 let   recCrf       = 23;
+let   recAudio     = false;
 let   recTargetRes = '1280x720';
 let   snapFilter   = 'none';
 let   snapQuality  = 95;
@@ -1790,6 +1823,10 @@ function reconnect() {
 document.addEventListener('visibilitychange', function () {
   if (document.visibilityState === 'visible') reconnect();
 });
+// iOS web apps fire pagehide/pageshow when backgrounded/foregrounded
+window.addEventListener('pageshow', function (e) {
+  if (e.persisted) reconnect();
+});
 
 _tick(); // start on page load
 
@@ -1853,7 +1890,7 @@ function closeOtherPanels(keep) {
 }
 
 // ── Section cards (Gallery / Stats) ────────────────────────────────────────────
-const _secOpen = { gallery: true, stats: true };
+const _secOpen = { gallery: false, stats: true };
 function toggleSection(id) {
   const body    = document.getElementById(id + '-body');
   const chevron = document.getElementById(id + '-chevron');
@@ -1954,6 +1991,13 @@ async function loadVideos() {
       sizeEl.textContent = sz;
       a.appendChild(sizeEl);
 
+      const del = document.createElement('button');
+      del.className = 'gallery-del';
+      del.title = 'Delete';
+      del.innerHTML = '&times;';
+      del.onclick = e => deleteVideo(f.filename, e);
+      a.appendChild(del);
+
       grid.appendChild(a);
     });
   } catch (_) {}
@@ -2014,6 +2058,17 @@ async function deleteSnapshot(filename, e) {
   } catch (_) { toast('Delete failed', 'error'); }
 }
 
+async function deleteVideo(filename, e) {
+  e.preventDefault();
+  e.stopPropagation();
+  try {
+    const r = await fetch('/api/videos/' + encodeURIComponent(filename), {method: 'DELETE'});
+    const d = await r.json();
+    if (d.ok) { loadVideos(); toast('Video deleted', ''); }
+    else       { toast('Delete failed', 'error'); }
+  } catch (_) { toast('Delete failed', 'error'); }
+}
+
 // ── Record panel ───────────────────────────────────────────────────────────────
 function toggleRecPanel() {
   if (recording) { stopRecording(); return; }
@@ -2051,12 +2106,13 @@ async function startRecording() {
   }
   await fetch('/api/record/start', {
     method: 'POST', headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({quality: recCrf}),
+    body: JSON.stringify({quality: recCrf, audio: recAudio}),
   });
   recording = true;
   recordStart = Date.now();
   recPanelOpen = false;
   document.getElementById('rec-panel').classList.add('panel-closed');
+  document.getElementById('mic-btn').disabled = true;
   const btn = document.getElementById('record-btn');
   btn.className = 'btn btn-rec recording';
   recordTimer = setInterval(() => {
@@ -2072,6 +2128,7 @@ async function stopRecording() {
   const d = await r.json();
   recording = false;
   clearInterval(recordTimer);
+  document.getElementById('mic-btn').disabled = false;
   const btn = document.getElementById('record-btn');
   btn.className = 'btn btn-rec';
   btn.innerHTML = '<svg width="13" height="13" viewBox="0 0 16 16" fill="currentColor"><circle cx="8" cy="8" r="5"/></svg> Record';
@@ -2165,6 +2222,7 @@ function _tlStopped() {
   document.getElementById('tl-interval-slider').disabled = false;
   document.getElementById('tl-dur-slider').disabled = false;
   document.getElementById('tl-btn').className = 'btn btn-tl';
+  document.getElementById('tl-btn').innerHTML = '<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="8" cy="8" r="6"/><path d="M8 4v4l2.5 2.5"/></svg> Timelapse';
   const startBtn = document.getElementById('tl-start-btn');
   startBtn.className = 'btn btn-tl';
   startBtn.style.cssText = 'width:100%;justify-content:center';
@@ -2287,7 +2345,7 @@ function renderStats(d) {
     const sigEl = document.getElementById('ic-wifi-signal');
     const label = sig >= -55 ? 'Excellent' : sig >= -65 ? 'Good' : sig >= -75 ? 'Fair' : 'Weak';
     const color = sig >= -55 ? 'var(--green)' : sig >= -65 ? 'var(--green-md)' : sig >= -75 ? 'var(--amber-lt)' : 'var(--red)';
-    sigEl.textContent = label + ' (' + sig + ' dBm)';
+    sigEl.innerHTML = label + '<br><span style="font-size:0.85em;font-weight:400;opacity:0.8">' + sig + ' dBm</span>';
     sigEl.style.color = color;
   } else {
     document.getElementById('ic-wifi-signal').textContent = '—';
@@ -2326,6 +2384,15 @@ const FILM_DESCS = {
   ektar:     'Hyper-saturated fine-grain film — vivid reds and deep blues.',
   agfa:      'Warm, faded vintage look with a gentle green cast in mids.',
 };
+
+function toggleMic() {
+  recAudio = !recAudio;
+  const btn = document.getElementById('mic-btn');
+  btn.classList.toggle('active', recAudio);
+  btn.innerHTML = (recAudio
+    ? '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a3 3 0 0 1 3 3v7a3 3 0 0 1-6 0V5a3 3 0 0 1 3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="22"/></svg> Microphone On'
+    : '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a3 3 0 0 1 3 3v7a3 3 0 0 1-6 0V5a3 3 0 0 1 3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="22"/></svg> Microphone Off');
+}
 
 function toggleFilterPanel() {
   if (filterPanelOpen) {

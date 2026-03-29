@@ -3,6 +3,10 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Garden Cams">
+<link rel="apple-touch-icon" sizes="180x180" href="/static/icon-180.png">
 <title>Home Garden Cameras</title>
 <style>
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -390,7 +394,7 @@ header::after {
 .action-btn {
   flex: 1;
   min-width: 90px;
-  padding: 13px 14px;
+  padding: 11px 14px;
   border-radius: var(--radius);
   border: 1px solid var(--border);
   background: var(--surface2);
@@ -399,10 +403,22 @@ header::after {
   font-weight: 600;
   cursor: pointer;
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 7px;
+  gap: 3px;
   transition: background 0.15s, border-color 0.15s, color 0.15s, opacity 0.15s;
+}
+.btn-main {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.btn-hint {
+  font-size: 10px;
+  font-weight: 400;
+  color: var(--muted);
+  letter-spacing: 0.1px;
 }
 .action-btn:hover  { background: var(--surface); }
 .action-btn:active { opacity: 0.75; }
@@ -440,28 +456,6 @@ header::after {
   50%       { opacity: 0.2; }
 }
 
-/* Quality toggle */
-.quality-bar {
-  display: flex;
-  gap: 6px;
-  padding: 10px 18px 4px;
-}
-.qual-btn {
-  flex: 1;
-  padding: 8px 10px;
-  border-radius: var(--radius);
-  border: 1px solid var(--border);
-  background: var(--surface2);
-  color: var(--muted);
-  font-size: 11px;
-  font-weight: 700;
-  cursor: pointer;
-  text-transform: uppercase;
-  letter-spacing: 0.6px;
-  transition: background 0.15s, border-color 0.15s, color 0.15s;
-}
-.qual-btn:hover  { border-color: var(--green-dk); color: var(--text); }
-.qual-btn.active { background: var(--green-dk); border-color: var(--green); color: var(--green-lt); }
 
 /* In-drawer full controls link (mobile only) */
 .drawer-full-wrap {
@@ -566,7 +560,6 @@ header::after {
         <p>growing memories</p>
       </div>
     </div>
-    <a href="/" class="back-link">← Local camera</a>
   </header>
 
   <div class="cam-grid">
@@ -574,16 +567,15 @@ header::after {
     <div class="cam-tile"
          data-idx="{{ loop.index0 }}"
          data-name="{{ cam.name | e }}"
-         data-stream-url="/dashboard/cam/{{ loop.index0 }}/proxy/stream"
          data-full-url="/camera/{{ loop.index0 }}/"
          onclick="openDrawer(this)">
 
       <div class="tile-stream-wrap">
         <img class="tile-stream-img"
-             src="/dashboard/cam/{{ loop.index0 }}/proxy/stream?quality={{ tile_quality }}"
+             src=""
              alt="{{ cam.name | e }}"
-             onload="markOnline(this)"
-             onerror="markOffline(this)">
+             onload="onTileLoad(this)"
+             onerror="onTileError(this)">
         <div class="tile-offline-badge">Offline</div>
         <div class="tile-badges" id="tile-badges-{{ loop.index0 }}"></div>
         <div class="tile-hint">Tap to open controls</div>
@@ -624,27 +616,24 @@ header::after {
   </div>
 
   <div class="drawer-stream-wrap">
-    <img id="drawer-stream-img" src="" alt="Live feed">
+    <img id="drawer-stream-img" src="" alt="Live feed"
+         onload="onDrawerStreamLoad()" onerror="onDrawerStreamError()">
     <div id="drawer-offline-msg">Camera offline</div>
   </div>
 
   <div class="drawer-actions">
     <button class="action-btn photo-btn" id="btn-photo" onclick="doPhoto()">
-      📷 <span>Photo</span>
+      <span class="btn-main">📷 <span>Photo</span></span>
+      <span class="btn-hint">Full res</span>
     </button>
     <button class="action-btn rec-btn" id="btn-record" onclick="toggleRecord()">
-      <span class="rec-indicator">●</span>
-      <span id="rec-label">Record</span>
+      <span class="btn-main"><span class="rec-indicator">●</span> <span id="rec-label">Record</span></span>
+      <span class="btn-hint">High quality</span>
     </button>
     <button class="action-btn tl-btn" id="btn-timelapse" onclick="toggleTimelapse()">
-      ⏱ <span id="tl-label">Timelapse</span>
+      <span class="btn-main">⏱ <span id="tl-label">Timelapse</span></span>
+      <span class="btn-hint">30 min · 10s</span>
     </button>
-  </div>
-
-  <div class="quality-bar">
-    <button class="qual-btn" data-q="low"    onclick="setQuality('low')">Low</button>
-    <button class="qual-btn active" data-q="medium" onclick="setQuality('medium')">Med</button>
-    <button class="qual-btn" data-q="high"   onclick="setQuality('high')">High</button>
   </div>
 
   <div class="drawer-full-wrap">
@@ -671,7 +660,57 @@ let recRunning    = false;
 let tlRunning     = false;
 let pollTimer     = null;
 let toastTimer    = null;
-let streamQuality = 'medium';
+// Pull-based stream (iOS Safari compatible — MJPEG is not supported in Safari)
+const _TILE_FRAME_MS = Math.round(1000 / 15);   // 15 fps tiles
+const _DRAWER_FRAME_MS = Math.round(1000 / 15); // 15 fps drawer
+const _tileTimers   = {};   // idx -> timeoutId
+let   _drawerTimer  = null;
+
+function _tileFrameUrl(idx) {
+  return '/dashboard/cam/' + idx + '/proxy/api/frame?t=' + Date.now();
+}
+function _drawerFrameUrl() {
+  return '/dashboard/cam/' + activeIdx + '/proxy/api/frame?t=' + Date.now();
+}
+
+function _startTile(idx) {
+  const img = document.querySelector('.cam-tile[data-idx="' + idx + '"] .tile-stream-img');
+  if (img) img.src = _tileFrameUrl(idx);
+}
+
+function onTileLoad(img) {
+  markOnline(img);
+  const idx = parseInt(img.closest('.cam-tile').dataset.idx, 10);
+  clearTimeout(_tileTimers[idx]);
+  _tileTimers[idx] = setTimeout(() => _startTile(idx), _TILE_FRAME_MS);
+}
+
+function onTileError(img) {
+  markOffline(img);
+  const idx = parseInt(img.closest('.cam-tile').dataset.idx, 10);
+  clearTimeout(_tileTimers[idx]);
+  _tileTimers[idx] = setTimeout(() => _startTile(idx), 4000);
+}
+
+function _startDrawerStream() {
+  clearTimeout(_drawerTimer);
+  if (activeIdx === null) return;
+  document.getElementById('drawer-stream-img').src = _drawerFrameUrl();
+}
+
+function onDrawerStreamLoad() {
+  if (activeIdx === null) return;
+  document.getElementById('drawer-offline-msg').classList.remove('show');
+  clearTimeout(_drawerTimer);
+  _drawerTimer = setTimeout(_startDrawerStream, _DRAWER_FRAME_MS);
+}
+
+function onDrawerStreamError() {
+  if (activeIdx === null) return;
+  document.getElementById('drawer-offline-msg').classList.add('show');
+  clearTimeout(_drawerTimer);
+  _drawerTimer = setTimeout(_startDrawerStream, 4000);
+}
 
 /* ── Online / offline indicators ────────────────────────────────────────────── */
 
@@ -699,7 +738,6 @@ function openDrawer(tile) {
   document.getElementById('drawer-title').textContent    = tile.dataset.name;
   document.getElementById('drawer-full-link').href       = tile.dataset.fullUrl;
   document.getElementById('drawer-full-btn').href        = tile.dataset.fullUrl;
-  document.getElementById('drawer-stream-img').src       = tile.dataset.streamUrl + '?quality=' + streamQuality;
   document.getElementById('drawer-offline-msg').classList.remove('show');
   document.getElementById('drawer-status').textContent   = '';
 
@@ -711,6 +749,7 @@ function openDrawer(tile) {
   document.getElementById('drawer-backdrop').classList.add('visible');
   document.getElementById('drawer').classList.add('open');
 
+  _startDrawerStream();
   fetchStatus();
   pollTimer = setInterval(fetchStatus, 3000);
 }
@@ -725,7 +764,9 @@ function closeDrawer() {
   document.getElementById('drawer').classList.remove('open');
   document.getElementById('drawer-backdrop').classList.remove('visible');
 
-  // Clear src after slide-out to stop the MJPEG connection
+  // Stop the pull-based stream and clear src after slide-out
+  clearTimeout(_drawerTimer);
+  _drawerTimer = null;
   setTimeout(() => {
     document.getElementById('drawer-stream-img').src = '';
   }, 360);
@@ -823,7 +864,7 @@ async function doPhoto() {
   const btn = document.getElementById('btn-photo');
   btn.disabled = true;
   try {
-    const resp = await camFetch(activeIdx, 'api/snapshot', 'POST', {});
+    const resp = await camFetch(activeIdx, 'api/snapshot', 'POST', { quality: 95 });
     const data = await resp.json();
     showToast(data.filename ? `📷 Saved: ${data.filename}` : 'Snapshot failed');
   } catch {
@@ -838,8 +879,9 @@ async function toggleRecord() {
   const btn  = document.getElementById('btn-record');
   btn.disabled = true;
   const path = recRunning ? 'api/record/stop' : 'api/record/start';
+  const body = recRunning ? {} : { crf: 18, audio: true };
   try {
-    const resp = await camFetch(activeIdx, path, 'POST', {});
+    const resp = await camFetch(activeIdx, path, 'POST', body);
     const data = await resp.json();
     if (data.error) {
       showToast('Camera unreachable');
@@ -861,7 +903,7 @@ async function toggleTimelapse() {
   const btn  = document.getElementById('btn-timelapse');
   btn.disabled = true;
   const path = tlRunning ? 'api/timelapse/stop' : 'api/timelapse/start';
-  const body = tlRunning ? {} : { interval: 10, duration: 0 };
+  const body = tlRunning ? {} : { interval: 10, duration: 1800 };
   try {
     const resp = await camFetch(activeIdx, path, 'POST', body);
     const data = await resp.json();
@@ -877,22 +919,6 @@ async function toggleTimelapse() {
     showToast('Error controlling timelapse');
   } finally {
     btn.disabled = false;
-  }
-}
-
-/* ── Quality toggle ──────────────────────────────────────────────────────────── */
-
-function setQuality(q) {
-  streamQuality = q;
-  document.querySelectorAll('.qual-btn').forEach(b => {
-    b.classList.toggle('active', b.dataset.q === q);
-  });
-  if (activeIdx !== null) {
-    const tile = document.querySelector(`.cam-tile[data-idx="${activeIdx}"]`);
-    if (tile) {
-      document.getElementById('drawer-stream-img').src =
-        tile.dataset.streamUrl + '?quality=' + q;
-    }
   }
 }
 
@@ -920,6 +946,40 @@ function showToast(msg) {
 document.addEventListener('keydown', e => {
   if (e.key === 'Escape' && activeIdx !== null) closeDrawer();
 });
+
+/* ── Tile stream init + visibility handling ──────────────────────────────────── */
+
+function _startAllTiles() {
+  document.querySelectorAll('.cam-tile').forEach(tile => {
+    _startTile(parseInt(tile.dataset.idx, 10));
+  });
+}
+
+function _stopAllTiles() {
+  Object.keys(_tileTimers).forEach(idx => {
+    clearTimeout(_tileTimers[idx]);
+    delete _tileTimers[idx];
+  });
+}
+
+// Resume streams when tab/app becomes visible again
+document.addEventListener('visibilitychange', function () {
+  if (document.visibilityState === 'visible') {
+    _startAllTiles();
+    if (activeIdx !== null) _startDrawerStream();
+  }
+});
+
+// iOS web apps fire pageshow when restored from background
+window.addEventListener('pageshow', function (e) {
+  if (e.persisted) {
+    _startAllTiles();
+    if (activeIdx !== null) _startDrawerStream();
+  }
+});
+
+// Kick off tile streams on page load
+_startAllTiles();
 </script>
 </body>
 </html>

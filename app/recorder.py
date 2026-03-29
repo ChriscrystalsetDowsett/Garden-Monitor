@@ -5,17 +5,30 @@ from pathlib import Path
 
 from .config import VIDEOS_DIR
 
+AUDIO_DEVICE = 'plughw:C930e,0'
 
-def _convert_recording(src, dst, fps, crf=23):
+
+def _convert_recording(src, dst, fps, crf=23, audio_src=None, start_ts=None):
     """Convert a raw MJPEG dump to H.264 MP4; delete source on success."""
-    result = subprocess.run(
-        ["ffmpeg", "-y", "-r", str(fps), "-f", "mjpeg",
-         "-i", str(src), "-c:v", "libx264", "-pix_fmt", "yuv420p", "-crf", str(crf),
-         str(dst)],
-        capture_output=True, timeout=300,
-    )
+    cmd = ['ffmpeg', '-y', '-r', str(fps), '-f', 'mjpeg', '-i', str(src)]
+    if audio_src and Path(audio_src).exists() and Path(audio_src).stat().st_size > 0:
+        cmd += ['-i', str(audio_src), '-c:a', 'aac', '-shortest']
+    cmd += ['-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-crf', str(crf)]
+    if start_ts:
+        # start_ts format: "YYYY-MM-DD_HH-MM-SS" → ISO 8601 for ffmpeg
+        iso_dt = start_ts[:10] + "T" + start_ts[11:].replace("-", ":")
+        cmd += [
+            '-metadata', f'creation_time={iso_dt}',
+            '-metadata', f'title={dst.stem}',
+            '-metadata', 'comment=Garden Monitor Video',
+            '-metadata', 'encoder=Garden Monitor',
+        ]
+    cmd += [str(dst)]
+    result = subprocess.run(cmd, capture_output=True, timeout=300)
     if result.returncode == 0:
         src.unlink(missing_ok=True)
+        if audio_src:
+            Path(audio_src).unlink(missing_ok=True)
 
 
 class VideoRecorder:
@@ -28,8 +41,10 @@ class VideoRecorder:
         self.filename = None
         self.start_time = None
         self.frame_count = 0
+        self._audio_proc = None
+        self._audio_file = None
 
-    def start(self, crf=23):
+    def start(self, crf=23, audio=False):
         with self._lock:
             if self.running:
                 return False
@@ -38,8 +53,22 @@ class VideoRecorder:
             self._file = open(VIDEOS_DIR / self.filename, "wb")
             self.frame_count = 0
             self.start_time = time.time()
+            self._start_ts  = ts
             self.running = True
             self.crf = crf
+            self._audio_proc = None
+            self._audio_file = None
+            if audio:
+                audio_path = VIDEOS_DIR / f"Video_{ts}.wav"
+                self._audio_file = str(audio_path)
+                try:
+                    self._audio_proc = subprocess.Popen(
+                        ['ffmpeg', '-y', '-f', 'alsa', '-i', AUDIO_DEVICE, str(audio_path)],
+                        stderr=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                    )
+                except Exception:
+                    self._audio_proc = None
+                    self._audio_file = None
         return True
 
     def write(self, frame):
@@ -53,18 +82,31 @@ class VideoRecorder:
             if not self.running:
                 return None
             self.running = False
-            duration = time.time() - self.start_time if self.start_time else 0
-            fc        = self.frame_count
-            fname     = self.filename
+            duration   = time.time() - self.start_time if self.start_time else 0
+            fc         = self.frame_count
+            fname      = self.filename
+            start_ts   = getattr(self, "_start_ts", None)
+            audio_proc = self._audio_proc
+            audio_file = self._audio_file
+            self._audio_proc = None
+            self._audio_file = None
             if self._file:
                 self._file.close()
                 self._file = None
+        if audio_proc:
+            audio_proc.terminate()
+            try:
+                audio_proc.wait(timeout=3)
+            except Exception:
+                audio_proc.kill()
         if fname and fc > 0 and duration > 0:
             fps = max(1, round(fc / duration))
             src = VIDEOS_DIR / fname
             dst = VIDEOS_DIR / fname.replace(".mjpeg", ".mp4")
             threading.Thread(
-                target=_convert_recording, args=(src, dst, fps, self.crf), daemon=True
+                target=_convert_recording,
+                args=(src, dst, fps, self.crf, audio_file, start_ts),
+                daemon=True,
             ).start()
         return fname
 
