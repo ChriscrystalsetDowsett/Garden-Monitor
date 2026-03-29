@@ -31,12 +31,14 @@ def index():
 
 @app.route("/api/frame")
 def api_frame():
-    """Return the current JPEG frame (pull-based streaming)."""
+    """Return the current JPEG frame (pull-based streaming).
+
+    Served at STREAM_JPEG_QUALITY (see settings.yaml) so the live feed uses
+    less bandwidth.  Photos, video, and timelapse use the full-quality buffer.
+    """
     if not camera.enabled:
         return "", 503
-    with camera.output.condition:
-        camera.output.condition.wait(timeout=2)
-        frame = camera.output.frame
+    frame = camera.get_stream_frame()
     if not frame:
         return "", 503
     return Response(

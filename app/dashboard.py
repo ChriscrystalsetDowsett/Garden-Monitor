@@ -13,11 +13,14 @@ dashboard = Blueprint("dashboard", __name__)
 _API_TIMEOUT    = 8    # seconds for regular JSON API calls
 _STREAM_CONNECT = 10   # seconds to establish a frame connection
 
-# fps and JPEG quality per quality level
+# (fps, jpeg_quality, resize_width) per quality level
+# resize_width > 0 shrinks the frame on the dashboard server before forwarding,
+# cutting bandwidth over the two-hop proxy path (Pi → dashboard → browser).
+# 0 = full resolution (no resize).
 _QUALITY = {
-    "low":    (8,  45),
-    "medium": (15, 68),
-    "high":   (24, 85),
+    "low":    (5,  70, 480),
+    "medium": (12, 75, 640),
+    "high":   (24, 85,   0),
 }
 
 
@@ -144,19 +147,24 @@ def _proxy(idx, path):
     # This avoids frame-queue buildup that causes lag over the internet.
     # Re-encoding at lower quality happens here so camera Pis stay stateless.
     if path == "stream":
-        quality   = request.args.get("quality", "medium")
-        fps, q    = _QUALITY.get(quality, _QUALITY["medium"])
-        min_delay = 1.0 / fps
-        frame_url = f"{_cam_base(idx)}/api/frame"
+        quality          = request.args.get("quality", "medium")
+        fps, q, resize_w = _QUALITY.get(quality, _QUALITY["medium"])
+        min_delay        = 1.0 / fps
+        frame_url        = f"{_cam_base(idx)}/api/frame"
 
         def _encode(data):
-            """Re-encode JPEG at target quality if meaningfully below camera default."""
-            if q >= 83:
+            """Re-encode JPEG at target quality and/or resize on the dashboard server."""
+            needs_resize   = resize_w > 0
+            needs_reencode = q < 83
+            if not needs_resize and not needs_reencode:
                 return data
             arr = _np.frombuffer(data, dtype=_np.uint8)
             img = _cv2.imdecode(arr, _cv2.IMREAD_COLOR)
             if img is None:
                 return data
+            if needs_resize and img.shape[1] > resize_w:
+                h = round(img.shape[0] * resize_w / img.shape[1])
+                img = _cv2.resize(img, (resize_w, h), interpolation=_cv2.INTER_AREA)
             ok, enc = _cv2.imencode(".jpg", img, [_cv2.IMWRITE_JPEG_QUALITY, q])
             return enc.tobytes() if ok else data
 

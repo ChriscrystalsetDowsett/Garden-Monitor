@@ -556,6 +556,27 @@ header::after {
   .drawer-stream-wrap { max-height: 36vh; }
   .action-btn { padding: 11px 8px; gap: 5px; }
 }
+
+/* ── Timelapse countdown strip (inside drawer) ───────────────── */
+.drawer-tl-strip {
+  border-top: 1px solid rgba(217,119,6,0.2);
+  background: rgba(217,119,6,0.06);
+  overflow: hidden;
+}
+.drawer-tl-bar { height: 2px; background: var(--border); }
+.drawer-tl-bar-fill {
+  height: 100%; width: 0%;
+  background: linear-gradient(90deg, var(--amber), var(--amber-lt));
+  transition: width 1.2s linear;
+}
+.drawer-tl-body {
+  display: flex; align-items: center;
+  padding: 10px 18px; gap: 10px;
+}
+.drawer-tl-lbl    { font-size: 12px; font-weight: 600; color: var(--amber-lt); }
+.drawer-tl-frames { font-size: 11px; color: var(--muted); margin-top: 2px; }
+.drawer-tl-time   { font-size: 18px; font-weight: 700; color: var(--amber-lt); letter-spacing: 0.04em; line-height: 1; font-variant-numeric: tabular-nums; }
+.drawer-tl-sub    { font-size: 9px; color: var(--dim); text-transform: uppercase; letter-spacing: 0.08em; margin-top: 3px; }
 </style>
 </head>
 <body>
@@ -662,6 +683,23 @@ header::after {
     </a>
   </div>
 
+  <!-- Timelapse countdown strip -->
+  <div id="drawer-tl-strip" class="drawer-tl-strip" style="display:none">
+    <div class="drawer-tl-bar" id="drawer-tl-bar-track" style="display:none">
+      <div class="drawer-tl-bar-fill" id="drawer-tl-bar-fill"></div>
+    </div>
+    <div class="drawer-tl-body">
+      <div style="flex:1;min-width:0">
+        <div class="drawer-tl-lbl">&#x23F1; Timelapse running</div>
+        <div class="drawer-tl-frames" id="drawer-tl-frames"></div>
+      </div>
+      <div style="display:flex;flex-direction:column;align-items:flex-end">
+        <div class="drawer-tl-time" id="drawer-tl-time">&#x2014;</div>
+        <div class="drawer-tl-sub" id="drawer-tl-sub">remaining</div>
+      </div>
+    </div>
+  </div>
+
   <div class="drawer-status" id="drawer-status"></div>
 </div>
 
@@ -733,6 +771,51 @@ function onDrawerStreamError() {
   _drawerTimer = setTimeout(_startDrawerStream, 4000);
 }
 
+// Timelapse countdown clock state
+let tlDashStart    = null;  // Date.now() when TL began (client-interpolated)
+let tlDashDuration = 0;     // seconds; 0 = unlimited
+let tlDashCount    = 0;     // latest frame count from server
+let tlClockTimer   = null;
+
+/* ── Timelapse countdown helpers ─────────────────────────────────────────────── */
+
+function fmtHMS(secs) {
+  const s = Math.max(0, Math.round(secs));
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const sec = s % 60;
+  if (h > 0) return h + ':' + String(m).padStart(2,'0') + ':' + String(sec).padStart(2,'0');
+  return String(m).padStart(2,'0') + ':' + String(sec).padStart(2,'0');
+}
+
+function _tlDashTick() {
+  if (activeIdx === null || !tlRunning || tlDashStart === null) return;
+  const elapsed  = (Date.now() - tlDashStart) / 1000;
+  const frmEl    = document.getElementById('drawer-tl-frames');
+  const barTrack = document.getElementById('drawer-tl-bar-track');
+  const fillEl   = document.getElementById('drawer-tl-bar-fill');
+  const timeEl   = document.getElementById('drawer-tl-time');
+  const subEl    = document.getElementById('drawer-tl-sub');
+  if (frmEl) frmEl.textContent = tlDashCount > 0 ? tlDashCount.toLocaleString() + ' frames captured' : '';
+  if (tlDashDuration > 0) {
+    const rem = Math.max(0, tlDashDuration - elapsed);
+    if (timeEl)   timeEl.textContent  = fmtHMS(rem);
+    if (subEl)    subEl.textContent   = 'remaining';
+    if (barTrack) barTrack.style.display = 'block';
+    if (fillEl)   fillEl.style.width  = Math.min(100, elapsed / tlDashDuration * 100) + '%';
+    // Update the tile badge with live remaining time
+    const badges = document.getElementById('tile-badges-' + activeIdx);
+    if (badges) {
+      const tlBadge = badges.querySelector('.badge-tl');
+      if (tlBadge) tlBadge.textContent = '\u23F1 ' + fmtHMS(rem);
+    }
+  } else {
+    if (timeEl)   timeEl.textContent  = fmtHMS(elapsed);
+    if (subEl)    subEl.textContent   = 'elapsed';
+    if (barTrack) barTrack.style.display = 'none';
+  }
+}
+
 /* ── Online / offline indicators ────────────────────────────────────────────── */
 
 function markOnline(img) {
@@ -761,6 +844,8 @@ function openDrawer(tile) {
   document.getElementById('drawer-full-btn').href        = tile.dataset.fullUrl;
   document.getElementById('drawer-offline-msg').classList.remove('show');
   document.getElementById('drawer-status').textContent   = '';
+  document.getElementById('drawer-tl-strip').style.display = 'none';
+  tlDashStart = null;
 
   recRunning = false;
   tlRunning  = false;
@@ -779,10 +864,12 @@ function openDrawer(tile) {
 
 function closeDrawer() {
   clearInterval(pollTimer);
-  pollTimer  = null;
-  activeIdx  = null;
-  recRunning = false;
-  tlRunning  = false;
+  if (tlClockTimer) { clearInterval(tlClockTimer); tlClockTimer = null; }
+  pollTimer    = null;
+  activeIdx    = null;
+  recRunning   = false;
+  tlRunning    = false;
+  tlDashStart  = null;
 
   document.getElementById('drawer').classList.remove('open');
   document.getElementById('drawer-backdrop').classList.remove('visible');
@@ -821,6 +908,19 @@ async function fetchStatus() {
     setOffline(false);
     recRunning = rec.running || false;
     tlRunning  = tl.running  || false;
+
+    if (tl.running) {
+      tlDashCount    = tl.count    || 0;
+      tlDashDuration = tl.duration || 0;
+      tlDashStart    = Date.now() - ((tl.elapsed || 0) * 1000);
+      document.getElementById('drawer-tl-strip').style.display = '';
+      if (!tlClockTimer) tlClockTimer = setInterval(_tlDashTick, 1000);
+      _tlDashTick();
+    } else {
+      document.getElementById('drawer-tl-strip').style.display = 'none';
+      if (tlClockTimer) { clearInterval(tlClockTimer); tlClockTimer = null; }
+    }
+
     updateButtons();
     updateCamToggle();
     updateTileBadges(activeIdx);
@@ -850,10 +950,8 @@ function updateStatusText(rec, tl) {
     const secs = rec.duration ? Math.floor(rec.duration) : 0;
     parts.push(`Recording — ${secs}s, ${rec.frame_count || 0} frames`);
   }
-  if (tl.running) {
-    parts.push(`Timelapse — ${tl.count || 0} frames, interval ${tl.interval}s`);
-  }
-  document.getElementById('drawer-status').textContent = parts.join('  ·  ') || 'Ready';
+  // TL info shown in the countdown strip — omit from plain-text status
+  document.getElementById('drawer-status').textContent = parts.join('  ·  ') || (tl.running ? '' : 'Ready');
 }
 
 function updateTileBadges(idx) {

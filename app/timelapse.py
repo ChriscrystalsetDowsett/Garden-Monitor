@@ -3,8 +3,8 @@ import threading, time, subprocess
 from datetime import datetime
 from pathlib import Path
 
-from .config import SNAPSHOT_DIR, VIDEOS_DIR
-from .camera import camera
+from .config import SNAPSHOT_DIR, VIDEOS_DIR, CAM_BACKEND
+from .camera import camera, cam_ctrl, cam_ctrl_lock
 
 # ── Compile status (shared with app routes) ───────────────────────────────────
 _compile_lock   = threading.Lock()
@@ -33,12 +33,13 @@ def compile_timelapse_to_video(files, output_name=None):
             ["ffmpeg", "-y",
              "-f", "concat", "-safe", "0", "-i", str(list_path),
              "-r", "24", "-c:v", "libx264", "-pix_fmt", "yuv420p", "-crf", "23",
+             "-movflags", "+faststart",
              "-metadata", f"creation_time={iso_ts}",
              "-metadata", f"title={out_stem}",
              "-metadata", "comment=Garden Monitor Timelapse",
              "-metadata", "encoder=Garden Monitor",
              str(out_path)],
-            capture_output=True, timeout=600,
+            capture_output=True, timeout=7200,
         )
         if result.returncode == 0:
             for fp in files:
@@ -50,10 +51,12 @@ def compile_timelapse_to_video(files, output_name=None):
                 _compile_status.update({"running": False, "output": out_name, "error": None})
             return out_name
         err = result.stderr.decode(errors="replace")[-500:]
+        out_path.unlink(missing_ok=True)
         with _compile_lock:
             _compile_status.update({"running": False, "output": None, "error": err})
         return None
     except Exception as e:
+        out_path.unlink(missing_ok=True)
         with _compile_lock:
             _compile_status.update({"running": False, "output": None, "error": str(e)})
         return None
@@ -106,6 +109,8 @@ class TimeLapseManager:
         }
 
     def _run(self):
+        _lock_focus()   # one-shot AF then freeze — no-op on non-AF sensors
+
         while self.running:
             if self.duration > 0:
                 if time.time() - self.start_time >= self.duration:
@@ -123,6 +128,8 @@ class TimeLapseManager:
             self._stop_event.wait(timeout=sleep_for)
             self._stop_event.clear()
 
+        _unlock_focus() # restore user's AF mode before (possibly long) compile
+
         if self._files:
             files = list(self._files)
             self._files = []
@@ -132,6 +139,46 @@ class TimeLapseManager:
 
 
 timelapse = TimeLapseManager()
+
+
+# ── Focus lock helpers (picamera2 / IMX708 only) ───────────────────────────────
+
+def _lock_focus():
+    """Trigger one-shot AF, wait ~1.5 s for it to settle, then freeze to manual.
+
+    Called at the start of every timelapse capture loop so that focus drift
+    cannot ruin long sessions.  Silently no-ops on V4L2 cameras or sensors
+    that do not support AF controls (e.g. fixed-focus IMX219).
+    If the user has already set af_mode='manual' we honour that and skip.
+    """
+    if CAM_BACKEND != "picamera2":
+        return
+    with cam_ctrl_lock:
+        if cam_ctrl.get("af_mode", "continuous") == "manual":
+            return
+    try:
+        with camera.lock:
+            handle = camera._handle
+        if handle is None:
+            return
+        # One-shot AF trigger, then lock the lens position
+        handle.set_controls({"AfMode": 1, "AfTrigger": 0})
+        time.sleep(1.5)          # allow the lens to reach focus
+        handle.set_controls({"AfMode": 0})
+    except Exception:
+        pass
+
+
+def _unlock_focus():
+    """Restore the user's configured AF mode once capture is done."""
+    if CAM_BACKEND != "picamera2":
+        return
+    try:
+        with cam_ctrl_lock:
+            c = dict(cam_ctrl)
+        camera.apply_isp_controls(c)
+    except Exception:
+        pass
 
 
 # Compile any timelapse images left over from a previous session

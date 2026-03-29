@@ -30,6 +30,10 @@ DEFAULT_RESOLUTION = _cfg["camera"]["default_resolution"]
 if DEFAULT_RESOLUTION not in RESOLUTIONS:
     DEFAULT_RESOLUTION = "1280x720"
 
+# Quality for the live stream served by /api/frame.  Photos, video, and
+# timelapse always use the full JPEG_QUALITY (85) stored in the frame buffer.
+STREAM_JPEG_QUALITY = max(1, min(95, int(_cfg["camera"].get("stream_quality", 60))))
+
 CAM_BACKEND = _cfg["camera"].get("backend", "picamera2")   # "picamera2" | "v4l2"
 
 # ── Dashboard camera list ─────────────────────────────────────────────────────
@@ -57,6 +61,9 @@ CAM_CTRL_DEFAULTS = {
     "sharpness":       1.0,     # 0–4 → V4L2 0–255 (neutral 128)
     "contrast":        1.0,     # 0–4 → V4L2 0–255 (neutral 128)
     "noise_reduction": "fast",  # kept for API compat; not applied on C930e/V4L2
+    # Autofocus (picamera2 / IMX708 only)
+    "af_mode":  "continuous",   # "continuous" | "auto" | "manual"
+    "af_range": "normal",       # "normal" (30cm–∞) | "macro" (3–30cm) | "full" (3cm–∞)
     # Post-capture: OpenCV per-frame
     "tint":        0,           # −100 (green) … +100 (magenta)
     "hflip":       bool(_cfg["camera"].get("hflip", False)),

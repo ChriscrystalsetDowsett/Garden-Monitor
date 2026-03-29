@@ -6,7 +6,7 @@ import cv2
 import numpy as np
 from PIL import Image, ImageEnhance, ImageFilter, ImageOps
 
-from .config import SNAPSHOT_DIR, RESOLUTIONS, CAM_CTRL_DEFAULTS, DEFAULT_RESOLUTION, CAM_BACKEND
+from .config import SNAPSHOT_DIR, RESOLUTIONS, CAM_CTRL_DEFAULTS, DEFAULT_RESOLUTION, CAM_BACKEND, STREAM_JPEG_QUALITY
 from .film import FILM_FILTERS
 from .postprocess import postprocess_jpeg
 
@@ -285,6 +285,26 @@ class CameraManager:
         self._restart.set()
         return True
 
+    # ── Live-stream frame (reduced quality for bandwidth) ─────────────────────
+
+    def get_stream_frame(self):
+        """Return the current frame re-encoded at STREAM_JPEG_QUALITY.
+
+        Photos, video, and timelapse all read self.output.frame directly and
+        are unaffected — they always get the full JPEG_QUALITY (85) buffer.
+        """
+        with self.output.condition:
+            self.output.condition.wait(timeout=2)
+            frame = self.output.frame
+        if not frame or STREAM_JPEG_QUALITY >= JPEG_QUALITY:
+            return frame
+        arr = np.frombuffer(frame, dtype=np.uint8)
+        img = cv2.imdecode(arr, cv2.IMREAD_COLOR)
+        if img is None:
+            return frame
+        ok, enc = cv2.imencode(".jpg", img, [cv2.IMWRITE_JPEG_QUALITY, STREAM_JPEG_QUALITY])
+        return enc.tobytes() if ok else frame
+
     # ── Snapshot ───────────────────────────────────────────────────────────────
 
     def capture(self, prefix="Photo", filter_name="none", quality=85):
@@ -361,6 +381,11 @@ class CameraManager:
             controls["Saturation"] = max( 0.0, min(2.0,  1.0 + int(c.get("saturation", 0)) / 100.0))
             controls["Sharpness"]  = max( 0.0, min(16.0, float(c.get("sharpness", 1.0))))
             controls["Contrast"]   = max( 0.0, min(32.0, float(c.get("contrast",  1.0))))
+            # Autofocus (IMX708 / Camera Module 3 only — silently ignored on other sensors)
+            _af_mode  = {"continuous": 2, "auto": 1, "manual": 0}
+            _af_range = {"normal": 0, "macro": 1, "full": 2}
+            controls["AfMode"]  = _af_mode.get( c.get("af_mode",  "continuous"), 2)
+            controls["AfRange"] = _af_range.get(c.get("af_range", "normal"),     0)
             picam2.set_controls(controls)
         except Exception:
             pass

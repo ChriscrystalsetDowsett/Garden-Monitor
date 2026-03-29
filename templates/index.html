@@ -1063,6 +1063,29 @@ body.ios-fs #feed-wrap img {
   .frame-count { font-size: 26px; }
   .tl-value-display { font-size: 18px; }
 }
+
+/* ── Timelapse live countdown strip ──────────────────────────── */
+.tl-live-strip {
+  background: rgba(217,119,6,0.07);
+  border: 1px solid rgba(217,119,6,0.22);
+  border-radius: var(--radius);
+  overflow: hidden;
+  margin-bottom: 12px;
+}
+.tl-strip-prog { height: 2px; background: var(--border); }
+.tl-strip-fill {
+  height: 100%; width: 0%;
+  background: linear-gradient(90deg, var(--amber), var(--amber-lt));
+  transition: width 1.2s linear;
+}
+.tl-strip-body {
+  display: flex; align-items: center;
+  padding: 10px 14px; gap: 10px;
+}
+.tl-strip-lbl    { font-size: 12px; font-weight: 600; color: var(--amber-lt); }
+.tl-strip-frames { font-size: 11px; color: var(--muted); margin-top: 2px; }
+.tl-strip-time   { font-size: 20px; font-weight: 700; color: var(--amber-lt); letter-spacing: 0.04em; line-height: 1; font-variant-numeric: tabular-nums; }
+.tl-strip-sub    { font-size: 9px; color: var(--dim); text-transform: uppercase; letter-spacing: 0.08em; margin-top: 3px; }
 </style>
 </head>
 <body>
@@ -1194,6 +1217,23 @@ body.ios-fs #feed-wrap img {
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
       Reset All
     </button>
+  </div>
+
+  <!-- ── Timelapse live countdown strip ── -->
+  <div id="tl-live-strip" class="tl-live-strip" style="display:none">
+    <div class="tl-strip-prog" id="tl-strip-prog" style="display:none">
+      <div class="tl-strip-fill" id="tl-strip-fill"></div>
+    </div>
+    <div class="tl-strip-body">
+      <div style="flex:1;min-width:0">
+        <div class="tl-strip-lbl">&#x23F1; Timelapse running</div>
+        <div class="tl-strip-frames" id="tl-strip-frames"></div>
+      </div>
+      <div style="display:flex;flex-direction:column;align-items:flex-end">
+        <div class="tl-strip-time" id="tl-strip-time">&#x2014;</div>
+        <div class="tl-strip-sub" id="tl-strip-sub">remaining</div>
+      </div>
+    </div>
   </div>
 
   <!-- ── Snapshot settings panel ── -->
@@ -1801,6 +1841,8 @@ document.addEventListener('DOMContentLoaded', async () => {
       _tlPollMs    = Math.max(1000, Math.min(30000, d.interval * 250));
       tlPollTimer  = setInterval(pollTL, _tlPollMs);
       tlClockTimer = setInterval(_tlClockTick, 1000);
+      document.getElementById('tl-live-strip').style.display = '';
+      _updateTLStrip(d.elapsed || 0);
     } else {
       _showTLIdle();
     }
@@ -2380,6 +2422,8 @@ async function startTL() {
   _showTLRunning(duration > 0);
   tlPollTimer  = setInterval(pollTL, _tlPollMs);
   tlClockTimer = setInterval(_tlClockTick, 1000);
+  document.getElementById('tl-live-strip').style.display = '';
+  _updateTLStrip(0);
 }
 
 async function stopTL() {
@@ -2405,6 +2449,7 @@ function _tlStopped() {
   startBtn.style.cssText = 'width:100%;justify-content:center';
   startBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="8" cy="8" r="6"/><path d="M8 4v4l2.5 2.5"/></svg> Start Timelapse';
   _showTLIdle();
+  document.getElementById('tl-live-strip').style.display = 'none';
 }
 
 async function pollTL() {
@@ -2929,6 +2974,29 @@ function _showTLIdle() {
   updateTLPreview();
 }
 
+// Update the persistent countdown strip above the panels.
+function _updateTLStrip(elapsed) {
+  const prog = document.getElementById('tl-strip-prog');
+  const fill = document.getElementById('tl-strip-fill');
+  const timeEl = document.getElementById('tl-strip-time');
+  const subEl  = document.getElementById('tl-strip-sub');
+  const frmEl  = document.getElementById('tl-strip-frames');
+  if (!timeEl) return;
+  const count = parseInt(document.getElementById('frame-count').textContent, 10) || 0;
+  frmEl.textContent = count > 0 ? count.toLocaleString() + ' frames captured' : '';
+  if (tlDuration_ > 0) {
+    const rem = Math.max(0, tlDuration_ - elapsed);
+    timeEl.textContent = fmtHMS(rem);
+    subEl.textContent  = 'remaining';
+    prog.style.display = 'block';
+    fill.style.width   = Math.min(100, elapsed / tlDuration_ * 100) + '%';
+  } else {
+    timeEl.textContent = fmtHMS(elapsed);
+    subEl.textContent  = 'elapsed';
+    prog.style.display = 'none';
+  }
+}
+
 // 1-second clock tick: updates elapsed, remaining, next-shot countdown, and tl-btn.
 function _tlClockTick() {
   if (!tlRunning || !tlStart_) return;
@@ -2957,6 +3025,8 @@ function _tlClockTick() {
   const ss = String(s % 60).padStart(2, '0');
   document.getElementById('tl-btn').innerHTML =
     '<svg width="11" height="11" viewBox="0 0 16 16" fill="currentColor"><rect x="3" y="3" width="10" height="10" rx="1"/></svg> ' + mm + ':' + ss;
+
+  _updateTLStrip(elapsed);
 }
 
 // ── Inject strength slider into each film card ─────────────────────────────────
