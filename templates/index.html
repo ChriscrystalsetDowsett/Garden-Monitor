@@ -946,7 +946,7 @@ body.ios-fs #feed-wrap img {
 
 /* ── Video items in gallery ──────────────────────────────────────── */
 .video-item { padding-top: 56.25% !important; }  /* 9/16 = 56.25% → 16:9 */
-.video-item video {
+.video-item img {
   position: absolute; top: 0; left: 0;
   width: 100%; height: 100%; object-fit: cover; display: block;
 }
@@ -2186,11 +2186,19 @@ async function loadVideos() {
       a.target = '_blank';
       a.title = f.filename;
 
-      const vid = document.createElement('video');
-      vid.src = '/videos/' + f.filename;
-      vid.preload = 'metadata';
-      vid.muted = true;
-      a.appendChild(vid);
+      const thumbUrl = '/videos/' + f.filename.replace('.mp4', '.thumb.jpg');
+      const img = document.createElement('img');
+      img.alt = f.filename;
+      if (f.has_thumb) {
+        img.src = thumbUrl;
+      } else {
+        // No thumbnail yet — show a neutral placeholder and retry once
+        img.style.opacity = '0.25';
+        img.src = thumbUrl;
+        img.onerror = () => { img.style.display = 'none'; };
+        img.onload = () => { img.style.opacity = ''; img.onerror = null; };
+      }
+      a.appendChild(img);
 
       const play = document.createElement('div');
       play.className = 'video-play';

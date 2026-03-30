@@ -173,7 +173,11 @@ def list_videos():
                 st = entry.stat()
                 entries.append((st.st_mtime, entry.name, st.st_size))
     entries.sort(key=lambda x: x[0], reverse=True)
-    return jsonify([{"filename": n, "size": s} for _, n, s in entries[:50]])
+    return jsonify([
+        {"filename": n, "size": s,
+         "has_thumb": (VIDEOS_DIR / n.replace(".mp4", ".thumb.jpg")).exists()}
+        for _, n, s in entries[:50]
+    ])
 
 
 @app.route("/videos/<filename>")

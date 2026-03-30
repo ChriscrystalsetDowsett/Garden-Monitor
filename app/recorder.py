@@ -8,6 +8,24 @@ from .config import VIDEOS_DIR
 AUDIO_DEVICE = 'plughw:C930e,0'
 
 
+def _extract_thumbnail(mp4_path: Path) -> None:
+    """Extract a single frame from 10 % into the video as a JPEG thumbnail."""
+    thumb = mp4_path.with_suffix(".thumb.jpg")
+    try:
+        subprocess.run(
+            ["ffmpeg", "-y",
+             "-ss", "0.1",           # start slightly in so black frames are avoided
+             "-i", str(mp4_path),
+             "-vf", "thumbnail=100", # pick best frame from first 100
+             "-frames:v", "1",
+             "-q:v", "3",            # JPEG quality (2=best, 5=good)
+             str(thumb)],
+            capture_output=True, timeout=30,
+        )
+    except Exception:
+        pass
+
+
 def _convert_recording(src, dst, fps, crf=23, audio_src=None, start_ts=None):
     """Convert a raw MJPEG dump to H.264 MP4; delete source on success."""
     cmd = ['ffmpeg', '-y', '-r', str(fps), '-f', 'mjpeg', '-i', str(src)]
@@ -43,6 +61,7 @@ def _convert_recording(src, dst, fps, crf=23, audio_src=None, start_ts=None):
         src.unlink(missing_ok=True)
         if audio_src:
             Path(audio_src).unlink(missing_ok=True)
+        _extract_thumbnail(dst)
 
 
 class VideoRecorder:

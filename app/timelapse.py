@@ -4,6 +4,7 @@ from datetime import datetime
 from pathlib import Path
 
 from .config import SNAPSHOT_DIR, VIDEOS_DIR, CAM_BACKEND
+from .recorder import _extract_thumbnail
 from .camera import camera, cam_ctrl, cam_ctrl_lock
 
 # ── Compile status (shared with app routes) ───────────────────────────────────
@@ -47,6 +48,7 @@ def compile_timelapse_to_video(files, output_name=None):
                     Path(fp).unlink()
                 except Exception:
                     pass
+            _extract_thumbnail(out_path)
             with _compile_lock:
                 _compile_status.update({"running": False, "output": out_name, "error": None})
             return out_name
