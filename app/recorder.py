@@ -12,7 +12,21 @@ def _convert_recording(src, dst, fps, crf=23, audio_src=None, start_ts=None):
     """Convert a raw MJPEG dump to H.264 MP4; delete source on success."""
     cmd = ['ffmpeg', '-y', '-r', str(fps), '-f', 'mjpeg', '-i', str(src)]
     if audio_src and Path(audio_src).exists() and Path(audio_src).stat().st_size > 0:
-        cmd += ['-i', str(audio_src), '-c:a', 'aac', '-shortest']
+        # Audio filter chain applied at encode time:
+        #   highpass=f=80   — cut rumble and handling noise below 80 Hz
+        #   afftdn=nf=-25   — FFT-based noise reduction (−25 dB noise floor)
+        #   loudnorm        — EBU R128 loudness normalisation (consistent levels)
+        #   acompressor     — gentle dynamic compression to even out peaks/quiet
+        audio_filters = (
+            "highpass=f=80,"
+            "afftdn=nf=-25,"
+            "loudnorm,"
+            "acompressor=threshold=-18dB:ratio=3:attack=5:release=50"
+        )
+        cmd += ['-i', str(audio_src),
+                '-af', audio_filters,
+                '-c:a', 'aac', '-b:a', '192k', '-ar', '48000', '-ac', '1',
+                '-shortest']
     cmd += ['-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-crf', str(crf)]
     if start_ts:
         # start_ts format: "YYYY-MM-DD_HH-MM-SS" → ISO 8601 for ffmpeg
@@ -63,7 +77,10 @@ class VideoRecorder:
                 self._audio_file = str(audio_path)
                 try:
                     self._audio_proc = subprocess.Popen(
-                        ['ffmpeg', '-y', '-f', 'alsa', '-i', AUDIO_DEVICE, str(audio_path)],
+                        ['ffmpeg', '-y',
+                         '-f', 'alsa', '-ar', '48000', '-ac', '2',
+                         '-i', AUDIO_DEVICE,
+                         str(audio_path)],
                         stderr=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
                     )
                 except Exception:
