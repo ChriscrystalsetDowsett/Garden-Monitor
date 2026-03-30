@@ -153,8 +153,8 @@ def record_start():
 
 @app.route("/api/record/stop", methods=["POST"])
 def record_stop():
-    filename = video_recorder.stop()
-    return jsonify({"ok": bool(filename), "filename": filename})
+    filename, audio_ok = video_recorder.stop()
+    return jsonify({"ok": bool(filename), "filename": filename, "audio_ok": audio_ok})
 
 
 @app.route("/api/record/status")

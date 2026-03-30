@@ -1269,9 +1269,9 @@ body.ios-fs #feed-wrap img {
     <hr class="tl-divider">
     <div class="section-label" style="margin-bottom:10px">Audio</div>
     <div class="res-buttons">
-      <button class="res-opt" id="mic-btn" onclick="toggleMic()">
+      <button class="res-opt active" id="mic-btn" onclick="toggleMic()">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a3 3 0 0 1 3 3v7a3 3 0 0 1-6 0V5a3 3 0 0 1 3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="22"/></svg>
-        Microphone Off
+        Microphone On
       </button>
     </div>
     <hr class="tl-divider">
@@ -1782,7 +1782,7 @@ let   ctrlPanelOpen   = false;
 let   filterPanelOpen = false;
 let   resDDOpen    = false;
 let   recCrf       = 23;
-let   recAudio     = false;
+let   recAudio     = true;
 let   recTargetRes = '1280x720';
 let   snapFilter   = 'none';
 let   snapQuality  = 95;
@@ -2359,7 +2359,11 @@ async function stopRecording() {
   const btn = document.getElementById('record-btn');
   btn.className = 'btn btn-rec';
   btn.innerHTML = '<svg width="13" height="13" viewBox="0 0 16 16" fill="currentColor"><circle cx="8" cy="8" r="5"/></svg> Record';
-  if (d.filename) toast('\u2713 Recording saved \u2014 converting\u2026', 'success');
+  if (d.filename && d.audio_ok === false && recAudio) {
+    toast('\u2713 Recording saved (no audio captured)', 'error');
+  } else if (d.filename) {
+    toast('\u2713 Recording saved \u2014 converting\u2026', 'success');
+  }
   setTimeout(loadVideos, 4000);
 }
 

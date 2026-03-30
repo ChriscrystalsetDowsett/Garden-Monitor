@@ -1041,17 +1041,22 @@ async function toggleRecord() {
   const btn  = document.getElementById('btn-record');
   btn.disabled = true;
   const path = recRunning ? 'api/record/stop' : 'api/record/start';
-  const body = recRunning ? {} : { crf: 18, audio: true };
+  const body = recRunning ? {} : { quality: 18, audio: true };
   try {
     const resp = await camFetch(activeIdx, path, 'POST', body);
     const data = await resp.json();
     if (data.error) {
       showToast('Camera unreachable');
     } else {
+      const wasStarting = !recRunning;
       recRunning = !recRunning;
       updateButtons();
       updateTileBadges(activeIdx);
-      showToast(recRunning ? '🔴 Recording started' : '⏹ Recording stopped');
+      if (!recRunning && data.audio_ok === false && body.audio) {
+        showToast('⏹ Recording stopped (no audio captured)');
+      } else {
+        showToast(recRunning ? '🔴 Recording started (with audio)' : '⏹ Recording stopped');
+      }
     }
   } catch {
     showToast('Error controlling recording');

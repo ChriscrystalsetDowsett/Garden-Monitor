@@ -76,6 +76,7 @@ class VideoRecorder:
         self.frame_count = 0
         self._audio_proc = None
         self._audio_file = None
+        self._audio_requested = False
 
     def start(self, crf=23, audio=False):
         with self._lock:
@@ -91,6 +92,7 @@ class VideoRecorder:
             self.crf = crf
             self._audio_proc = None
             self._audio_file = None
+            self._audio_requested = bool(audio)
             if audio:
                 audio_path = VIDEOS_DIR / f"Video_{ts}.wav"
                 self._audio_file = str(audio_path)
@@ -100,7 +102,7 @@ class VideoRecorder:
                          '-f', 'alsa', '-ar', '48000', '-ac', '2',
                          '-i', AUDIO_DEVICE,
                          str(audio_path)],
-                        stderr=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                        stderr=subprocess.PIPE, stdout=subprocess.DEVNULL,
                     )
                 except Exception:
                     self._audio_proc = None
@@ -116,35 +118,48 @@ class VideoRecorder:
     def stop(self):
         with self._lock:
             if not self.running:
-                return None
+                return None, False
             self.running = False
-            duration   = time.time() - self.start_time if self.start_time else 0
-            fc         = self.frame_count
-            fname      = self.filename
-            start_ts   = getattr(self, "_start_ts", None)
-            audio_proc = self._audio_proc
-            audio_file = self._audio_file
-            self._audio_proc = None
-            self._audio_file = None
+            duration          = time.time() - self.start_time if self.start_time else 0
+            fc                = self.frame_count
+            fname             = self.filename
+            start_ts          = getattr(self, "_start_ts", None)
+            audio_proc        = self._audio_proc
+            audio_file        = self._audio_file
+            audio_requested   = self._audio_requested
+            self._audio_proc      = None
+            self._audio_file      = None
+            self._audio_requested = False
             if self._file:
                 self._file.close()
                 self._file = None
         if audio_proc:
             audio_proc.terminate()
             try:
-                audio_proc.wait(timeout=3)
+                audio_proc.wait(timeout=5)
             except Exception:
                 audio_proc.kill()
+                try:
+                    audio_proc.wait(timeout=2)
+                except Exception:
+                    pass
+
+        # Confirm audio actually captured something
+        audio_ok = False
+        if audio_requested and audio_file:
+            p = Path(audio_file)
+            audio_ok = p.exists() and p.stat().st_size > 4096
+
         if fname and fc > 0 and duration > 0:
             fps = max(1, round(fc / duration))
             src = VIDEOS_DIR / fname
             dst = VIDEOS_DIR / fname.replace(".mjpeg", ".mp4")
             threading.Thread(
                 target=_convert_recording,
-                args=(src, dst, fps, self.crf, audio_file, start_ts),
+                args=(src, dst, fps, self.crf, audio_file if audio_ok else None, start_ts),
                 daemon=True,
             ).start()
-        return fname
+        return fname, audio_ok
 
     def status(self):
         with self._lock:
