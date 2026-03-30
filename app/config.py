@@ -43,6 +43,12 @@ TILE_QUALITY       = _dash.get("tile_quality", "low")
 DASHBOARD_PASSWORD = _dash.get("password", "")
 SECRET_KEY         = _dash.get("secret_key", "dev-secret-key")
 
+# ── Camera schedule ───────────────────────────────────────────────────────────
+_sched             = _cfg.get("schedule", {})
+SCHEDULE_ENABLED   = bool(_sched.get("enabled", False))
+SCHEDULE_OFF       = _sched.get("camera_off", "22:00")  # HH:MM local time
+SCHEDULE_ON        = _sched.get("camera_on",  "06:00")  # HH:MM local time
+
 # ── libcamera constants ───────────────────────────────────────────────────────
 AWB_MODES = {
     "auto": 0, "incandescent": 1, "tungsten": 2, "fluorescent": 3,

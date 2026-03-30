@@ -10,9 +10,11 @@ from .timelapse import timelapse, get_compile_status
 from .recorder import video_recorder
 from .stats import get_stats, get_pi_info
 from .dashboard import dashboard as dashboard_bp
+from . import scheduler
 
 # Wire the recorder into the camera stream so it captures what the user sees
 camera.output.recorder = video_recorder
+scheduler.start(camera)
 
 app = Flask(
     __name__,
