@@ -7,6 +7,18 @@ from .config import VIDEOS_DIR
 
 AUDIO_DEVICE = 'plughw:C930e,0'
 
+def _check_audio_available() -> bool:
+    """Return True if the ALSA device in AUDIO_DEVICE exists on this host."""
+    try:
+        # AUDIO_DEVICE format: "plughw:<CardName>,<dev>" — extract the card name
+        card_name = AUDIO_DEVICE.split(':')[1].split(',')[0]
+        cards = Path('/proc/asound/cards').read_text()
+        return card_name.lower() in cards.lower()
+    except Exception:
+        return False
+
+AUDIO_AVAILABLE: bool = _check_audio_available()
+
 
 def _extract_thumbnail(mp4_path: Path) -> None:
     """Extract a single frame from 10 % into the video as a JPEG thumbnail."""

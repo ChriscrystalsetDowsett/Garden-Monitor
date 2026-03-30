@@ -7,7 +7,7 @@ from flask import Flask, Response, render_template, jsonify, request, send_from_
 from .config import SNAPSHOT_DIR, VIDEOS_DIR, CAM_CTRL_DEFAULTS, SECRET_KEY
 from .camera import camera, cam_ctrl, cam_ctrl_lock
 from .timelapse import timelapse, get_compile_status
-from .recorder import video_recorder
+from .recorder import video_recorder, AUDIO_AVAILABLE
 from .stats import get_stats, get_pi_info
 from .dashboard import dashboard as dashboard_bp
 from . import scheduler
@@ -224,4 +224,6 @@ def stats():
 
 @app.route("/api/info")
 def pi_info():
-    return jsonify(get_pi_info())
+    info = get_pi_info()
+    info["audio_available"] = AUDIO_AVAILABLE
+    return jsonify(info)

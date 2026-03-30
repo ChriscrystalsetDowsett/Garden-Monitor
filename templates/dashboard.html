@@ -717,6 +717,7 @@ let activeIdx     = null;
 let recRunning    = false;
 let tlRunning     = false;
 let camEnabled    = true;
+let drawerHasAudio = false;
 let pollTimer     = null;
 let toastTimer    = null;
 // Pull-based stream (iOS Safari compatible — MJPEG is not supported in Safari)
@@ -857,8 +858,10 @@ function openDrawer(tile) {
   document.getElementById('drawer-backdrop').classList.add('visible');
   document.getElementById('drawer').classList.add('open');
 
+  drawerHasAudio = false;
   _startDrawerStream();
   fetchStatus();
+  fetchCamInfo();
   pollTimer = setInterval(fetchStatus, 3000);
 }
 
@@ -928,6 +931,18 @@ async function fetchStatus() {
   } catch {
     setOffline(true);
   }
+}
+
+async function fetchCamInfo() {
+  if (activeIdx === null) return;
+  try {
+    const resp = await camFetch(activeIdx, 'api/info');
+    if (!resp.ok) return;
+    const d = await resp.json();
+    drawerHasAudio = d.audio_available === true;
+    const hint = document.querySelector('#btn-record .btn-hint');
+    if (hint) hint.textContent = drawerHasAudio ? 'High quality · audio' : 'High quality';
+  } catch (_) {}
 }
 
 function setOffline(offline) {
@@ -1041,7 +1056,7 @@ async function toggleRecord() {
   const btn  = document.getElementById('btn-record');
   btn.disabled = true;
   const path = recRunning ? 'api/record/stop' : 'api/record/start';
-  const body = recRunning ? {} : { quality: 18, audio: true };
+  const body = recRunning ? {} : { quality: 18, audio: drawerHasAudio };
   try {
     const resp = await camFetch(activeIdx, path, 'POST', body);
     const data = await resp.json();
@@ -1055,7 +1070,7 @@ async function toggleRecord() {
       if (!recRunning && data.audio_ok === false && body.audio) {
         showToast('⏹ Recording stopped (no audio captured)');
       } else {
-        showToast(recRunning ? '🔴 Recording started (with audio)' : '⏹ Recording stopped');
+        showToast(recRunning ? (drawerHasAudio ? '🔴 Recording started (with audio)' : '🔴 Recording started') : '⏹ Recording stopped');
       }
     }
   } catch {
