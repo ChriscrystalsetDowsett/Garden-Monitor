@@ -37,8 +37,11 @@ STREAM_JPEG_QUALITY = max(1, min(95, int(_cfg["camera"].get("stream_quality", 60
 CAM_BACKEND = _cfg["camera"].get("backend", "picamera2")   # "picamera2" | "v4l2"
 
 # ── Dashboard camera list ─────────────────────────────────────────────────────
-CAMERAS      = _cfg.get("cameras", [])
-TILE_QUALITY = _cfg.get("dashboard", {}).get("tile_quality", "low")
+CAMERAS            = _cfg.get("cameras", [])
+_dash              = _cfg.get("dashboard", {})
+TILE_QUALITY       = _dash.get("tile_quality", "low")
+DASHBOARD_PASSWORD = _dash.get("password", "")
+SECRET_KEY         = _dash.get("secret_key", "dev-secret-key")
 
 # ── libcamera constants ───────────────────────────────────────────────────────
 AWB_MODES = {

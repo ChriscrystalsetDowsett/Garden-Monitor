@@ -4,7 +4,7 @@ from pathlib import Path
 
 from flask import Flask, Response, render_template, jsonify, request, send_from_directory
 
-from .config import SNAPSHOT_DIR, VIDEOS_DIR, CAM_CTRL_DEFAULTS
+from .config import SNAPSHOT_DIR, VIDEOS_DIR, CAM_CTRL_DEFAULTS, SECRET_KEY
 from .camera import camera, cam_ctrl, cam_ctrl_lock
 from .timelapse import timelapse, get_compile_status
 from .recorder import video_recorder
@@ -19,6 +19,7 @@ app = Flask(
     template_folder=str(Path(__file__).parent.parent / "templates"),
     static_folder=str(Path(__file__).parent.parent / "static"),
 )
+app.secret_key = SECRET_KEY
 app.register_blueprint(dashboard_bp)
 
 

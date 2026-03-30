@@ -1,14 +1,125 @@
 """Dashboard blueprint — multi-camera overview, API proxy, and full UI proxy."""
+import hmac
 import re as _re
 import time as _time
 import requests as _requests
 import cv2 as _cv2
 import numpy as _np
-from flask import Blueprint, Response, jsonify, render_template, request, stream_with_context
+from functools import wraps
+from flask import Blueprint, Response, jsonify, render_template, request, \
+                  session, redirect, stream_with_context
 
-from .config import CAMERAS, TILE_QUALITY
+from .config import CAMERAS, TILE_QUALITY, DASHBOARD_PASSWORD
 
 dashboard = Blueprint("dashboard", __name__)
+
+# ── Authentication ─────────────────────────────────────────────────────────────
+
+_LOGIN_PAGE = """\
+<!DOCTYPE html><html lang="en"><head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>Garden Cams — Login</title>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+*{-webkit-tap-highlight-color:transparent}
+:root{
+  --bg:#070d07;--surface:#0d180d;--surface2:#132013;--border:#1a2e1a;
+  --green:#22c55e;--green-dk:#166534;--green-md:#16a34a;--green-lt:#4ade80;
+  --text:#edf6ed;--muted:#87a887;--dim:#4a6b4a;--red:#ef4444;--radius:12px;
+}
+body{
+  background:var(--bg);
+  background-image:radial-gradient(ellipse 80% 40% at 50% -5%,rgba(34,197,94,.07) 0%,transparent 70%);
+  color:var(--text);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
+  min-height:100vh;display:flex;align-items:center;justify-content:center;
+}
+.card{
+  background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);
+  padding:36px 32px 32px;width:100%;max-width:360px;
+  box-shadow:0 8px 32px rgba(0,0,0,.5);
+}
+.logo{
+  width:52px;height:52px;background:var(--green-dk);border-radius:50%;
+  display:flex;align-items:center;justify-content:center;font-size:24px;
+  margin:0 auto 20px;
+}
+h1{font-size:18px;font-weight:700;color:var(--green-lt);text-align:center;margin-bottom:4px;}
+p{font-size:12px;color:var(--muted);text-align:center;margin-bottom:24px;}
+label{display:block;font-size:11px;font-weight:600;letter-spacing:.06em;
+  text-transform:uppercase;color:var(--dim);margin-bottom:6px;}
+input[type=password]{
+  width:100%;padding:10px 14px;
+  background:var(--surface2);border:1px solid var(--border);border-radius:8px;
+  color:var(--text);font-size:14px;outline:none;
+  transition:border-color .15s;
+}
+input[type=password]:focus{border-color:var(--green-md);}
+.err{
+  font-size:12px;color:var(--red);background:rgba(239,68,68,.08);
+  border:1px solid rgba(239,68,68,.25);border-radius:7px;
+  padding:8px 12px;margin-bottom:14px;
+}
+button{
+  margin-top:16px;width:100%;padding:11px;
+  background:linear-gradient(135deg,var(--green-dk),var(--green-md));
+  color:#fff;border:none;border-radius:9px;
+  font-size:14px;font-weight:600;cursor:pointer;
+  transition:opacity .15s;
+}
+button:hover{opacity:.88;}
+</style>
+</head><body>
+<div class="card">
+  <div class="logo">🌿</div>
+  <h1>Garden Cameras</h1>
+  <p>Enter the dashboard password to continue</p>
+  {error}
+  <form method="post">
+    <label for="pw">Password</label>
+    <input type="password" id="pw" name="password" autofocus autocomplete="current-password">
+    <button type="submit">Sign in</button>
+  </form>
+</div>
+</body></html>"""
+
+
+def _authed():
+    """Return True if the current session is authenticated (or no password set)."""
+    if not DASHBOARD_PASSWORD:
+        return True
+    return session.get("dashboard_authed") is True
+
+
+def _require_auth(f):
+    @wraps(f)
+    def _wrapped(*args, **kwargs):
+        if not _authed():
+            return redirect("/dashboard/login")
+        return f(*args, **kwargs)
+    return _wrapped
+
+
+@dashboard.route("/dashboard/login", methods=["GET", "POST"])
+def login():
+    if not DASHBOARD_PASSWORD:
+        return redirect("/dashboard")
+    error = ""
+    if request.method == "POST":
+        pw = request.form.get("password", "")
+        if hmac.compare_digest(pw, DASHBOARD_PASSWORD):
+            session["dashboard_authed"] = True
+            return redirect("/dashboard")
+        error = '<div class="err">Incorrect password — try again.</div>'
+    return _LOGIN_PAGE.replace("{error}", error), 200, {"Content-Type": "text/html; charset=utf-8"}
+
+
+@dashboard.route("/dashboard/logout")
+def logout():
+    session.pop("dashboard_authed", None)
+    return redirect("/dashboard/login")
+
 
 _API_TIMEOUT    = 8    # seconds for regular JSON API calls
 _STREAM_CONNECT = 10   # seconds to establish a frame connection
@@ -32,6 +143,7 @@ def _cam_base(idx):
 # ── Dashboard grid ─────────────────────────────────────────────────────────────
 
 @dashboard.route("/dashboard")
+@_require_auth
 def index():
     return render_template("dashboard.html", cameras=CAMERAS, tile_quality=TILE_QUALITY)
 
@@ -42,6 +154,7 @@ def index():
     "/dashboard/cam/<int:idx>/proxy/<path:api_path>",
     methods=["GET", "POST", "DELETE"],
 )
+@_require_auth
 def cam_proxy(idx, api_path):
     """Proxy API + stream calls from the dashboard grid to a camera Pi."""
     if idx < 0 or idx >= len(CAMERAS):
@@ -53,6 +166,7 @@ def cam_proxy(idx, api_path):
 
 @dashboard.route("/camera/<int:idx>", methods=["GET"])
 @dashboard.route("/camera/<int:idx>/", methods=["GET"])
+@_require_auth
 def camera_full(idx):
     """
     Serve the camera Pi's full UI with all URLs rewritten to pass through
@@ -123,6 +237,7 @@ def camera_full(idx):
 
 
 @dashboard.route("/camera/<int:idx>/<path:path>", methods=["GET", "POST", "DELETE"])
+@_require_auth
 def camera_proxy(idx, path):
     """Proxy all sub-requests (stream, API, snapshots, videos) for the full UI."""
     if idx < 0 or idx >= len(CAMERAS):
