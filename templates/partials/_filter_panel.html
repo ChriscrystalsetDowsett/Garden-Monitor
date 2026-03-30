@@ -1,0 +1,90 @@
+  <div id="filter-panel" class="tl-settings panel-closed">
+    <div class="section-label">Film Emulation</div>
+
+    <div id="film-chips">
+
+      <!-- Clear / original -->
+      <button class="film-clear active" data-film="none" onclick="setFilm(this)">
+        <span class="film-clear-lbl">No Filter</span>
+        <span class="film-clear-sub">Original output</span>
+      </button>
+
+      <div class="film-grid">
+
+        <button class="film-card" data-film="portra" onclick="setFilm(this)">
+          <span class="film-swatch" style="background:linear-gradient(135deg,#5a2808 0%,#b86e30 45%,#e8c090 80%,#f4dfc0 100%)"></span>
+          <div class="film-body">
+            <div class="film-brand">Kodak</div>
+            <div class="film-name">Portra 400</div>
+            <div class="film-tags">Portrait · Warm</div>
+          </div>
+        </button>
+
+        <button class="film-card" data-film="velvia" onclick="setFilm(this)">
+          <span class="film-swatch" style="background:linear-gradient(135deg,#0a2810 0%,#166020 35%,#083860 65%,#1468a8 100%)"></span>
+          <div class="film-body">
+            <div class="film-brand">Fujifilm</div>
+            <div class="film-name">Velvia 50</div>
+            <div class="film-tags">Landscape · Vivid</div>
+          </div>
+        </button>
+
+        <button class="film-card" data-film="hp5" onclick="setFilm(this)">
+          <span class="film-swatch" style="background:linear-gradient(135deg,#0c0c0c 0%,#444 40%,#a0a0a0 70%,#e8e8e8 100%)"></span>
+          <div class="film-body">
+            <div class="film-brand">Ilford</div>
+            <div class="film-name">HP5</div>
+            <div class="film-tags">B&amp;W · Classic</div>
+          </div>
+        </button>
+
+        <button class="film-card" data-film="cinestill" onclick="setFilm(this)">
+          <span class="film-swatch" style="background:linear-gradient(135deg,#060e18 0%,#0e4860 35%,#1878a0 60%,#7a2010 100%)"></span>
+          <div class="film-body">
+            <div class="film-brand">Cinestill</div>
+            <div class="film-name">800T</div>
+            <div class="film-tags">Night · Cinematic</div>
+          </div>
+        </button>
+
+        <button class="film-card" data-film="trix" onclick="setFilm(this)">
+          <span class="film-swatch" style="background:linear-gradient(135deg,#000 0%,#080808 25%,#d0d0d0 75%,#fff 100%)"></span>
+          <div class="film-body">
+            <div class="film-brand">Kodak</div>
+            <div class="film-name">Tri-X 400</div>
+            <div class="film-tags">B&amp;W · Street</div>
+          </div>
+        </button>
+
+        <button class="film-card" data-film="provia" onclick="setFilm(this)">
+          <span class="film-swatch" style="background:linear-gradient(135deg,#0e1820 0%,#2c4868 40%,#608898 70%,#90b4c4 100%)"></span>
+          <div class="film-body">
+            <div class="film-brand">Fujifilm</div>
+            <div class="film-name">Provia 100F</div>
+            <div class="film-tags">Neutral · Accurate</div>
+          </div>
+        </button>
+
+        <button class="film-card" data-film="ektar" onclick="setFilm(this)">
+          <span class="film-swatch" style="background:linear-gradient(135deg,#500808 0%,#b01010 35%,#183818 65%,#289828 100%)"></span>
+          <div class="film-body">
+            <div class="film-brand">Kodak</div>
+            <div class="film-name">Ektar 100</div>
+            <div class="film-tags">Landscape · Saturated</div>
+          </div>
+        </button>
+
+        <button class="film-card" data-film="agfa" onclick="setFilm(this)">
+          <span class="film-swatch" style="background:linear-gradient(135deg,#1e1608 0%,#607020 35%,#c89040 65%,#e8c870 100%)"></span>
+          <div class="film-body">
+            <div class="film-brand">Agfa</div>
+            <div class="film-name">Vista 200</div>
+            <div class="film-tags">Vintage · Faded</div>
+          </div>
+        </button>
+
+      </div><!-- /film-grid -->
+    </div><!-- /film-chips -->
+
+    <div id="film-desc" style="margin-top:12px;font-size:12px;color:var(--muted);min-height:16px;line-height:1.5"></div>
+  </div>

@@ -1,0 +1,137 @@
+  <div id="ctrl-panel" class="tl-settings panel-closed">
+
+    <!-- ── PRE-CAPTURE (Picamera2 ISP) ── -->
+    <div class="section-label">Shutter &amp; Gain</div>
+
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+      <span style="font-size:12px;color:var(--muted)" id="shutter-mode-label">Shutter speed <span style="color:var(--dim)">(0 = auto)</span></span>
+      <span style="font-size:12px;color:var(--green-lt)" id="ctrl-val-exposure">Auto</span>
+    </div>
+    <div class="slider-wrap">
+      <input type="range" id="ctrl-sl-exposure" min="0" max="8" step="1" value="0"
+             oninput="onShutterSlider(this)">
+    </div>
+    <div class="tl-presets" id="shutter-presets">
+      <span class="tl-preset active" onclick="setShutterStep(0)">Auto</span>
+      <span class="tl-preset" onclick="setShutterStep(1)">1/2000</span>
+      <span class="tl-preset" onclick="setShutterStep(2)">1/500</span>
+      <span class="tl-preset" onclick="setShutterStep(3)">1/120</span>
+      <span class="tl-preset" onclick="setShutterStep(4)">1/60</span>
+      <span class="tl-preset" onclick="setShutterStep(5)">1/30</span>
+      <span class="tl-preset" onclick="setShutterStep(6)">1/15</span>
+      <span class="tl-preset" onclick="setShutterStep(7)">1/4</span>
+      <span class="tl-preset" onclick="setShutterStep(8)">1s</span>
+    </div>
+    <div style="display:flex;justify-content:flex-end;margin-top:0">
+      <button class="res-opt" id="shutter-angle-btn" onclick="toggleShutterMode()" style="font-size:11px;padding:3px 8px">° Shutter angle</button>
+    </div>
+
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-top:10px;margin-bottom:6px">
+      <span style="font-size:12px;color:var(--muted)">Analogue gain / ISO <span style="color:var(--dim)">(0 = auto)</span></span>
+      <span style="font-size:12px;color:var(--green-lt)" id="ctrl-val-gain">Auto</span>
+    </div>
+    <div class="slider-wrap">
+      <input type="range" id="ctrl-sl-gain" min="0" max="5" step="1" value="0"
+             oninput="onGainSlider(this)">
+    </div>
+    <div class="tl-presets" id="gain-presets">
+      <span class="tl-preset active" onclick="setGainStep(0)">Auto</span>
+      <span class="tl-preset" onclick="setGainStep(1)">×1</span>
+      <span class="tl-preset" onclick="setGainStep(2)">×2</span>
+      <span class="tl-preset" onclick="setGainStep(3)">×4</span>
+      <span class="tl-preset" onclick="setGainStep(4)">×8</span>
+      <span class="tl-preset" onclick="setGainStep(5)">×16</span>
+    </div>
+
+    <div class="section-label" style="margin-top:14px">White Balance</div>
+    <div class="res-buttons" id="ctrl-awb-btns">
+      <button class="res-opt active" data-awb="auto"        onclick="setCtrlAwb(this)">Auto</button>
+      <button class="res-opt"        data-awb="daylight"    onclick="setCtrlAwb(this)">Daylight</button>
+      <button class="res-opt"        data-awb="cloudy"      onclick="setCtrlAwb(this)">Cloudy</button>
+      <button class="res-opt"        data-awb="fluorescent" onclick="setCtrlAwb(this)">Fluorescent</button>
+      <button class="res-opt"        data-awb="indoor"      onclick="setCtrlAwb(this)">Indoor</button>
+      <button class="res-opt"        data-awb="tungsten"    onclick="setCtrlAwb(this)">Tungsten</button>
+    </div>
+
+    <!-- Kelvin slider — shown when any manual preset is active -->
+    <div id="ctrl-kelvin-row" style="display:none;margin-top:10px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+        <span style="font-size:12px;color:var(--muted)">Temperature</span>
+        <span style="font-size:12px;color:var(--green-lt)" id="ctrl-val-ktemp">5600 K</span>
+      </div>
+      <div class="ktemp-wrap slider-wrap">
+        <input type="range" id="ctrl-sl-ktemp" min="2000" max="7500" step="100" value="5600"
+               oninput="onKelvinSlider(this)">
+      </div>
+      <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--dim);margin-top:2px">
+        <span>◀ Warm 2000K</span><span>Cool 7500K ▶</span>
+      </div>
+    </div>
+
+    <!-- Colour tint — green to magenta (post-processing) -->
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-top:10px;margin-bottom:6px">
+      <span style="font-size:12px;color:var(--muted)">Colour tint</span>
+      <span style="font-size:12px;color:var(--green-lt)" id="ctrl-val-tint">Neutral</span>
+    </div>
+    <div class="slider-wrap tint-wrap">
+      <input type="range" id="ctrl-sl-tint" min="-100" max="100" step="1" value="0"
+             oninput="onCtrlSlider('tint', this, 'ctrl-val-tint', fmtTint)">
+    </div>
+    <div style="display:flex;justify-content:space-between;font-size:11px;margin-top:2px">
+      <span style="color:#22c55e">◀ Green</span><span style="color:#d946ef">Magenta ▶</span>
+    </div>
+
+    <hr class="tl-divider">
+
+    <!-- ── POST-CAPTURE (OpenCV) ── -->
+    <div class="section-label">Live Image Adjustments</div>
+
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+      <span style="font-size:12px;color:var(--muted)">Brightness</span>
+      <span style="font-size:12px;color:var(--green-lt)" id="ctrl-val-brightness">0</span>
+    </div>
+    <div class="slider-wrap">
+      <input type="range" id="ctrl-sl-brightness" min="-100" max="100" step="1" value="0"
+             oninput="onCtrlSlider('brightness', this, 'ctrl-val-brightness', v => (v > 0 ? '+' : '') + v)">
+    </div>
+
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-top:10px;margin-bottom:6px">
+      <span style="font-size:12px;color:var(--muted)">Saturation <span style="color:var(--dim)">(−100 = greyscale)</span></span>
+      <span style="font-size:12px;color:var(--green-lt)" id="ctrl-val-saturation">0</span>
+    </div>
+    <div class="slider-wrap">
+      <input type="range" id="ctrl-sl-saturation" min="-100" max="100" step="1" value="0"
+             oninput="onCtrlSlider('saturation', this, 'ctrl-val-saturation', v => (v > 0 ? '+' : '') + v)">
+    </div>
+
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-top:10px;margin-bottom:6px">
+      <span style="font-size:12px;color:var(--muted)">Sharpness <span style="color:var(--dim)">(default 1.0)</span></span>
+      <span style="font-size:12px;color:var(--green-lt)" id="ctrl-val-sharpness">1.0</span>
+    </div>
+    <div class="slider-wrap">
+      <input type="range" id="ctrl-sl-sharpness" min="0" max="4" step="0.1" value="1.0"
+             oninput="onCtrlSlider('sharpness', this, 'ctrl-val-sharpness', v => v.toFixed(1))">
+    </div>
+
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-top:10px;margin-bottom:6px">
+      <span style="font-size:12px;color:var(--muted)">Contrast <span style="color:var(--dim)">(default 1.0)</span></span>
+      <span style="font-size:12px;color:var(--green-lt)" id="ctrl-val-contrast">1.0</span>
+    </div>
+    <div class="slider-wrap">
+      <input type="range" id="ctrl-sl-contrast" min="0" max="4" step="0.05" value="1.0"
+             oninput="onCtrlSlider('contrast', this, 'ctrl-val-contrast', v => v.toFixed(2))">
+    </div>
+
+    <div class="section-label" style="margin-top:14px">Noise Reduction</div>
+    <div class="res-buttons" id="ctrl-nr-btns">
+      <button class="res-opt"        data-nr="off"          onclick="setCtrlNR(this)">Off</button>
+      <button class="res-opt active" data-nr="fast"         onclick="setCtrlNR(this)">Fast</button>
+      <button class="res-opt"        data-nr="high_quality" onclick="setCtrlNR(this)">High Quality</button>
+    </div>
+
+    <hr class="tl-divider">
+    <button class="btn btn-secondary" style="width:100%;justify-content:center" onclick="resetCtrlDefaults()">
+      ↺ Reset all controls to defaults
+    </button>
+
+  </div>

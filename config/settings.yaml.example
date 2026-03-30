@@ -20,6 +20,15 @@ paths:
   photos: "data/photos"   # relative to the project root
   videos: "data/videos"   # relative to the project root
 
+# ── Camera schedule ───────────────────────────────────────────────────────────
+# Automatically disable the camera stream at night and re-enable in the morning.
+# Times are in 24-hour format (HH:MM) in the Pi's local timezone.
+# Set enabled to false to turn scheduling off without removing the times.
+schedule:
+  enabled: false
+  camera_off: "22:00"   # 10:00 pm
+  camera_on:  "06:00"   #  6:00 am
+
 # ── Dashboard — list of camera Pis to show in the /dashboard grid ─────────────
 # Add one entry per camera Pi. Use the Pi's LAN IP — 'localhost' only works if
 # the browser is running on that same machine.

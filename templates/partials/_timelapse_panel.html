@@ -1,0 +1,96 @@
+  <div id="tl-panel" class="tl-settings panel-closed">
+
+    <!-- Interval -->
+    <div class="tl-header">
+      <span class="section-label" style="margin-bottom:0">Interval between shots</span>
+      <span class="tl-value-display" id="tl-interval-display">10s</span>
+    </div>
+    <div class="slider-wrap">
+      <input type="range" id="tl-interval-slider" min="0" max="7" step="1" value="2"
+             oninput="onIntervalInput(this.value)">
+    </div>
+    <div class="tl-presets">
+      <span class="tl-preset" onclick="setInterval_(0)">1s</span>
+      <span class="tl-preset" onclick="setInterval_(1)">5s</span>
+      <span class="tl-preset active" onclick="setInterval_(2)">10s</span>
+      <span class="tl-preset" onclick="setInterval_(3)">30s</span>
+      <span class="tl-preset" onclick="setInterval_(4)">1m</span>
+      <span class="tl-preset" onclick="setInterval_(5)">5m</span>
+      <span class="tl-preset" onclick="setInterval_(6)">15m</span>
+      <span class="tl-preset" onclick="setInterval_(7)">1h</span>
+    </div>
+
+    <hr class="tl-divider">
+
+    <!-- Duration -->
+    <div class="tl-header">
+      <span class="section-label" style="margin-bottom:0">Recording duration</span>
+      <span class="tl-value-display" id="tl-dur-display">1h</span>
+    </div>
+    <div class="slider-wrap">
+      <input type="range" id="tl-dur-slider" min="0" max="8" step="1" value="3"
+             oninput="onDurInput(this.value)">
+    </div>
+    <div class="tl-presets">
+      <span class="tl-preset" onclick="setDur(0)">5m</span>
+      <span class="tl-preset" onclick="setDur(1)">15m</span>
+      <span class="tl-preset" onclick="setDur(2)">30m</span>
+      <span class="tl-preset active" onclick="setDur(3)">1h</span>
+      <span class="tl-preset" onclick="setDur(4)">2h</span>
+      <span class="tl-preset" onclick="setDur(5)">4h</span>
+      <span class="tl-preset" onclick="setDur(6)">8h</span>
+      <span class="tl-preset" onclick="setDur(7)">24h</span>
+      <span class="tl-preset" onclick="setDur(8)">&#x221e;</span>
+    </div>
+
+    <hr class="tl-divider">
+
+    <!-- Timelapse status block -->
+    <div class="tl-status-block" id="tl-status-block">
+
+      <!-- Progress bar (finite duration only, shown when running) -->
+      <div class="tl-prog-track" id="tl-prog-track" style="display:none">
+        <div class="tl-prog-fill" id="tl-prog-fill"></div>
+      </div>
+
+      <!-- Elapsed | Remaining (shown when running) -->
+      <div class="tl-time-row" id="tl-time-row" style="display:none">
+        <div class="tl-time-col">
+          <div class="tl-time-val" id="tl-elapsed">0:00</div>
+          <div class="tl-time-lbl">elapsed</div>
+        </div>
+        <div class="tl-time-sep"></div>
+        <div class="tl-time-col" id="tl-rem-col">
+          <div class="tl-time-val tl-time-val--dim" id="tl-remaining">—</div>
+          <div class="tl-time-lbl">remaining</div>
+        </div>
+      </div>
+
+      <!-- Frame count + estimated video duration (always visible) -->
+      <div class="tl-capture-row">
+        <div class="tl-capture-col">
+          <span class="tl-frame-num" id="frame-count">—</span>
+          <span class="tl-frame-lbl" id="tl-frame-lbl">total frames</span>
+        </div>
+        <div class="tl-capture-sep"></div>
+        <div class="tl-capture-col">
+          <span class="tl-videst" id="tl-videst">—</span>
+          <span class="tl-videst-lbl" id="tl-videst-lbl">video length</span>
+        </div>
+      </div>
+
+      <!-- Next-shot countdown (shown when running) -->
+      <div class="tl-next-row" id="tl-next-row" style="display:none">
+        <span class="tl-pulse-dot"></span>
+        <span id="tl-next-txt">capturing…</span>
+      </div>
+
+    </div>
+
+    <hr class="tl-divider">
+    <button class="btn btn-tl" style="width:100%;justify-content:center" id="tl-start-btn" onclick="startStopTL()">
+      <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="8" cy="8" r="6"/><path d="M8 4v4l2.5 2.5"/></svg>
+      Start Timelapse
+    </button>
+
+  </div>

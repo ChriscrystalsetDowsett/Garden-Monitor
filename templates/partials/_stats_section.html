@@ -1,0 +1,110 @@
+  <div class="section-card">
+    <button class="section-bar" onclick="toggleSection('stats')">
+      <span class="section-bar-spacer"></span>
+      <span class="section-bar-title">System Stats</span>
+      <div class="section-bar-right">
+        <svg id="stats-chevron" width="10" height="6" viewBox="0 0 10 6" fill="none"
+             stroke="rgba(255,255,255,0.45)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"
+             style="transform:rotate(180deg);transition:transform 0.35s cubic-bezier(0.4,0,0.2,1);flex-shrink:0">
+          <polyline points="1 1 5 5 9 1"/>
+        </svg>
+      </div>
+    </button>
+    <div class="section-body" id="stats-body">
+      <div class="gauges-row">
+        <div class="gauge-card">
+          <svg class="gauge-svg" viewBox="0 0 100 100">
+            <circle class="gauge-track" cx="50" cy="50" r="38"/>
+            <circle class="gauge-arc" id="arc-cpu" cx="50" cy="50" r="38"/>
+            <text class="gauge-val" id="gv-cpu" x="50" y="49">0</text>
+            <text class="gauge-unit" x="50" y="63">%</text>
+          </svg>
+          <span class="gauge-title">CPU</span>
+        </div>
+        <div class="gauge-card">
+          <svg class="gauge-svg" viewBox="0 0 100 100">
+            <circle class="gauge-track" cx="50" cy="50" r="38"/>
+            <circle class="gauge-arc" id="arc-ram" cx="50" cy="50" r="38"/>
+            <text class="gauge-val" id="gv-ram" x="50" y="49">0</text>
+            <text class="gauge-unit" x="50" y="63">%</text>
+          </svg>
+          <span class="gauge-title">RAM</span>
+          <span class="gauge-sub" id="ic-ram-usage">— / —</span>
+        </div>
+        <div class="gauge-card">
+          <svg class="gauge-svg" viewBox="0 0 100 100">
+            <circle class="gauge-track" cx="50" cy="50" r="38"/>
+            <circle class="gauge-arc" id="arc-temp" cx="50" cy="50" r="38"/>
+            <text class="gauge-val" id="gv-temp" x="50" y="49">&mdash;</text>
+            <text class="gauge-unit" x="50" y="63">&deg;C</text>
+          </svg>
+          <span class="gauge-title">Temp</span>
+        </div>
+        <div class="gauge-card">
+          <svg class="gauge-svg" viewBox="0 0 100 100">
+            <circle class="gauge-track" cx="50" cy="50" r="38"/>
+            <circle class="gauge-arc" id="arc-disk" cx="50" cy="50" r="38"/>
+            <text class="gauge-val" id="gv-disk" x="50" y="49">0</text>
+            <text class="gauge-unit" x="50" y="63">%</text>
+          </svg>
+          <span class="gauge-title">Disk</span>
+          <div class="gauge-disk-chips">
+            <div class="gauge-disk-chip">
+              <span class="gauge-disk-lbl">Used</span>
+              <span class="gauge-disk-val" id="ic-disk-used">—</span>
+            </div>
+            <div class="gauge-disk-chip">
+              <span class="gauge-disk-lbl">Free</span>
+              <span class="gauge-disk-val" id="ic-disk-free">—</span>
+            </div>
+            <div class="gauge-disk-chip">
+              <span class="gauge-disk-lbl">Total</span>
+              <span class="gauge-disk-val" id="ic-disk-total">—</span>
+            </div>
+          </div>
+        </div>
+      </div><!-- /gauges-row -->
+      <div class="info-row">
+        <div class="info-chip">
+          <span class="info-chip-label">FPS</span>
+          <span class="info-chip-val" id="ic-fps">&mdash;</span>
+        </div>
+        <div class="wifi-card">
+          <span class="wifi-card-title">WiFi Traffic</span>
+          <div class="wifi-traffic-row">
+            <div class="wifi-traffic-item">
+              <span class="wifi-traffic-val" id="ic-recv">&mdash;</span>
+              <span class="wifi-traffic-lbl">&#x2193; Download</span>
+            </div>
+            <div class="wifi-traffic-divider"></div>
+            <div class="wifi-traffic-item">
+              <span class="wifi-traffic-val" id="ic-send">&mdash;</span>
+              <span class="wifi-traffic-lbl">&#x2191; Upload</span>
+            </div>
+          </div>
+          <div class="wifi-meta-row">
+            <div class="wifi-meta-item">
+              <span class="wifi-meta-lbl">Link Speed</span>
+              <span class="wifi-meta-val" id="ic-wifi-rate">&mdash;</span>
+            </div>
+            <div class="wifi-meta-item">
+              <span class="wifi-meta-lbl">Signal</span>
+              <span class="wifi-meta-val" id="ic-wifi-signal">&mdash;</span>
+            </div>
+          </div>
+        </div>
+        <div class="info-chip">
+          <span class="info-chip-label">Uptime</span>
+          <span class="info-chip-val" id="ic-uptime">&mdash;</span>
+        </div>
+        <div class="info-chip">
+          <span class="info-chip-label">Camera</span>
+          <span class="info-chip-val" id="ic-cam">&mdash;</span>
+        </div>
+        <div class="info-chip" style="flex:2; min-width:120px">
+          <span class="info-chip-label">Pi Model</span>
+          <span class="info-chip-val" id="ic-pi">&mdash;</span>
+        </div>
+      </div><!-- /info-row -->
+    </div><!-- /stats section-body -->
+  </div>
