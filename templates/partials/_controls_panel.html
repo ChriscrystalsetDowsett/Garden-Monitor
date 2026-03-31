@@ -68,6 +68,19 @@
       </div>
     </div>
 
+    <!-- Warmth — cool to warm (post-processing) -->
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-top:10px;margin-bottom:6px">
+      <span style="font-size:12px;color:var(--muted)">Warmth</span>
+      <span style="font-size:12px;color:var(--green-lt)" id="ctrl-val-warmth">Neutral</span>
+    </div>
+    <div class="slider-wrap warmth-wrap">
+      <input type="range" id="ctrl-sl-warmth" min="-100" max="100" step="1" value="0"
+             oninput="onCtrlSlider('warmth', this, 'ctrl-val-warmth', fmtWarmth)">
+    </div>
+    <div style="display:flex;justify-content:space-between;font-size:11px;margin-top:2px">
+      <span style="color:#5b8dd9">◀ Cool</span><span style="color:#e8892a">Warm ▶</span>
+    </div>
+
     <!-- Colour tint — green to magenta (post-processing) -->
     <div style="display:flex;justify-content:space-between;align-items:center;margin-top:10px;margin-bottom:6px">
       <span style="font-size:12px;color:var(--muted)">Colour tint</span>

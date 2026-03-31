@@ -6,7 +6,7 @@ import requests as _requests
 import cv2 as _cv2
 import numpy as _np
 from functools import wraps
-from flask import Blueprint, Response, jsonify, render_template, request, \
+from flask import Blueprint, Response, make_response, jsonify, render_template, request, \
                   session, redirect, stream_with_context
 
 from .config import CAMERAS, TILE_QUALITY, DASHBOARD_PASSWORD
@@ -145,7 +145,9 @@ def _cam_base(idx):
 @dashboard.route("/dashboard")
 @_require_auth
 def index():
-    return render_template("dashboard.html", cameras=CAMERAS, tile_quality=TILE_QUALITY)
+    resp = make_response(render_template("dashboard.html", cameras=CAMERAS, tile_quality=TILE_QUALITY))
+    resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate"
+    return resp
 
 
 # ── Quick-action API proxy (used by dashboard JS) ──────────────────────────────
@@ -319,6 +321,29 @@ def _proxy(idx, path):
             content_type="multipart/x-mixed-replace; boundary=frame",
             direct_passthrough=True,
             headers={"X-Accel-Buffering": "no"},
+        )
+
+    # Live audio streams — must be proxied as streaming responses, not buffered.
+    if path in ("api/audio/stream", "api/audio/stream/raw"):
+        upstream = f"{_cam_base(idx)}/{path}"
+        is_raw   = path.endswith("/raw")
+        ctype    = "application/octet-stream" if is_raw else "audio/ogg"
+        chunk_sz = 512 if is_raw else 4096
+
+        def _audio_gen():
+            try:
+                with _requests.get(
+                    upstream, stream=True, timeout=(_STREAM_CONNECT, None),
+                ) as r:
+                    for chunk in r.iter_content(chunk_size=chunk_sz):
+                        if chunk:
+                            yield chunk
+            except Exception:
+                return
+        return Response(
+            stream_with_context(_audio_gen()),
+            content_type=ctype,
+            headers={"Cache-Control": "no-store, no-cache", "X-Accel-Buffering": "no"},
         )
 
     # Everything else — JSON API, snapshots, videos, static assets.

@@ -2,14 +2,15 @@
 import os
 from pathlib import Path
 
-from flask import Flask, Response, render_template, jsonify, request, send_from_directory
+from flask import Flask, Response, render_template, make_response, jsonify, request, send_from_directory
 
 from .config import SNAPSHOT_DIR, VIDEOS_DIR, CAM_CTRL_DEFAULTS, SECRET_KEY
 from .camera import camera, cam_ctrl, cam_ctrl_lock
 from .timelapse import timelapse, get_compile_status
-from .recorder import video_recorder, AUDIO_AVAILABLE
+from .recorder import video_recorder, AUDIO_AVAILABLE, audio_streamer
 from .stats import get_stats, get_pi_info
 from .dashboard import dashboard as dashboard_bp
+from .servo import servo
 from . import scheduler
 
 # Wire the recorder into the camera stream so it captures what the user sees
@@ -29,7 +30,9 @@ app.register_blueprint(dashboard_bp)
 
 @app.route("/")
 def index():
-    return render_template("index.html")
+    resp = make_response(render_template("index.html"))
+    resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate"
+    return resp
 
 
 @app.route("/api/frame")
@@ -140,6 +143,33 @@ def tl_compile_status():
     return jsonify(get_compile_status())
 
 
+# ── Live audio stream ─────────────────────────────────────────────────────────
+
+@app.route("/api/audio/stream/raw")
+def audio_stream_raw():
+    """Stream live audio as raw s16le PCM at 16 kHz for Web Audio API playback.
+
+    No container overhead — data flows within milliseconds of capture,
+    giving far lower latency than the Ogg endpoint.
+    """
+    if not AUDIO_AVAILABLE:
+        return "", 503
+
+    def generate():
+        yield from audio_streamer.subscribe_raw()
+
+    return Response(
+        generate(),
+        mimetype="application/octet-stream",
+        headers={
+            "Cache-Control": "no-store, no-cache",
+            "X-Audio-Sample-Rate": "16000",
+            "X-Audio-Channels": "1",
+            "X-Audio-Format": "s16le",
+        },
+    )
+
+
 # ── Recording ──────────────────────────────────────────────────────────────────
 
 @app.route("/api/record/start", methods=["POST"])
@@ -213,6 +243,26 @@ def set_cam_controls():
 @app.route("/api/camera_controls/defaults")
 def cam_ctrl_defaults():
     return jsonify(CAM_CTRL_DEFAULTS)
+
+
+# ── Servo pan/tilt ─────────────────────────────────────────────────────────────
+
+@app.route("/api/servo/move", methods=["POST"])
+def servo_move():
+    data = request.json or {}
+    servo.move(float(data.get("pan", 0.0)), float(data.get("tilt", 0.0)))
+    return jsonify({"ok": True})
+
+
+@app.route("/api/servo/stop", methods=["POST"])
+def servo_stop():
+    servo.stop()
+    return jsonify({"ok": True})
+
+
+@app.route("/api/servo/status")
+def servo_status():
+    return jsonify(servo.status())
 
 
 # ── System stats + info ────────────────────────────────────────────────────────

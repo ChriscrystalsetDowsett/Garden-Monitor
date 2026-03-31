@@ -158,20 +158,22 @@ header::after {
 }
 
 .feed-label {
-  font-size: 13px; font-weight: 500;
-  color: rgba(255,255,255,0.75);
-  text-shadow: 0 1px 4px rgba(0,0,0,0.9);
+  font-size: clamp(13px, 3.5vw, 16px); font-weight: 600;
+  color: rgba(255,255,255,0.85);
+  text-shadow: 0 1px 6px rgba(0,0,0,0.95);
+  letter-spacing: 0.01em;
 }
 
 .res-badge {
-  display: inline-flex; align-items: center; gap: 6px;
-  background: rgba(4,10,4,0.72);
-  backdrop-filter: blur(5px);
+  display: inline-flex; align-items: center; gap: 8px;
+  background: rgba(0,0,0,0.6);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
   border-radius: 999px;
-  padding: 4px 10px;
-  font-size: 12px;
+  padding: clamp(5px, 1.2vw, 8px) clamp(10px, 3vw, 16px);
+  font-size: clamp(12px, 3vw, 15px);
   cursor: pointer;
-  border: 1px solid rgba(34,197,94,0.15);
+  border: 1.5px solid rgba(255,255,255,0.16);
   transition: background 0.15s, border-color 0.15s;
   width: fit-content;
   user-select: none;
@@ -186,12 +188,13 @@ header::after {
 
 /* ── Camera enable/disable toggle (feed overlay) ─────────────────── */
 .feed-cam-toggle {
-  display: inline-flex; align-items: center; gap: 5px;
-  background: rgba(4,10,4,0.72);
-  backdrop-filter: blur(5px);
+  display: inline-flex; align-items: center; gap: 8px;
+  background: rgba(0,0,0,0.6);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
   border-radius: 999px;
-  padding: 4px 10px;
-  font-size: 12px;
+  padding: clamp(5px, 1.2vw, 8px) clamp(10px, 3vw, 16px);
+  font-size: clamp(12px, 3vw, 15px);
   cursor: pointer;
   border: 1px solid rgba(34,197,94,0.2);
   color: rgba(255,255,255,0.75);
@@ -427,6 +430,11 @@ input[type=range]:disabled::-webkit-slider-thumb { background: var(--dim); box-s
 }
 .ktemp-wrap input[type=range]:disabled { opacity: 0.45; cursor: default; }
 
+/* Warmth slider — cool blue→neutral→warm orange */
+.warmth-wrap input[type=range] {
+  background: linear-gradient(to right, #5b8dd9, #888888, #e8892a);
+}
+
 /* Colour tint slider — green→neutral→magenta */
 .tint-wrap input[type=range] {
   background: linear-gradient(to right, #22c55e, #888888, #d946ef);
@@ -434,13 +442,104 @@ input[type=range]:disabled::-webkit-slider-thumb { background: var(--dim); box-s
 
 /* Feed overlay flip buttons */
 .feed-flip-btns {
-  position: absolute; bottom: 10px; left: 10px; z-index: 3;
-  display: flex; gap: 5px;
+  position: absolute; bottom: 16px; left: 16px; z-index: 3;
+  display: flex; gap: 10px;
 }
 
 /* Fullscreen button — bottom-right corner */
 #fs-btn {
   position: absolute; bottom: 10px; right: 10px; z-index: 3;
+}
+
+/* ── Swipe-to-pan/tilt joystick overlay ── */
+#servo-joystick {
+  display: none;
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 15;
+}
+#servo-joystick.active { display: block; }
+#servo-ring {
+  width: 84px; height: 84px;
+  border-radius: 50%;
+  border: 1.5px solid rgba(255,255,255,0.35);
+  background: rgba(255,255,255,0.07);
+  position: absolute;
+  transform: translate(-50%, -50%);
+}
+#servo-dot {
+  width: 26px; height: 26px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.7);
+  box-shadow: 0 0 8px rgba(0,0,0,0.4);
+  position: absolute;
+  transform: translate(-50%, -50%);
+}
+
+/* ── Fullscreen quick-action buttons ── */
+.fs-quick-btns {
+  display: none;
+  position: absolute;
+  bottom: 16px; right: 16px;
+  z-index: 10;
+  gap: clamp(8px, 1.8vmin, 14px);
+  align-items: center;
+}
+.feed-wrap:fullscreen .fs-quick-btns,
+.feed-wrap:-webkit-full-screen .fs-quick-btns,
+body.ios-fs #fs-quick-btns {
+  display: flex;
+}
+/* Hide the fullscreen toggle button while already in fullscreen — no overlap */
+.feed-wrap:fullscreen #fs-btn,
+.feed-wrap:-webkit-full-screen #fs-btn,
+body.ios-fs #fs-btn {
+  display: none;
+}
+/* Portrait: lift circular buttons above the flip row so they don't collide */
+@media (orientation: portrait) {
+  .feed-wrap:fullscreen .fs-quick-btns,
+  .feed-wrap:-webkit-full-screen .fs-quick-btns,
+  body.ios-fs #fs-quick-btns {
+    bottom: 62px;
+  }
+}
+.fs-quick-btn {
+  /* vmin = shorter screen dimension — constrains size in both portrait and landscape */
+  width:  clamp(52px, 10vmin, 80px);
+  height: clamp(52px, 10vmin, 80px);
+  border-radius: 50%;
+  background: rgba(0,0,0,0.6);
+  border: 1.5px solid rgba(255,255,255,0.16);
+  color: rgba(255,255,255,0.92);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  transition: background 0.15s, transform 0.1s;
+  flex-shrink: 0;
+}
+/* Scale SVG icons to match button size */
+.fs-quick-btn svg {
+  width:  clamp(20px, 4vmin, 32px) !important;
+  height: clamp(20px, 4vmin, 32px) !important;
+}
+.fs-quick-btn:hover {
+  background: rgba(255,255,255,0.12);
+}
+.fs-quick-btn:active {
+  transform: scale(0.9);
+}
+.fs-quick-btn.active {
+  background: rgba(220,38,38,0.75);
+  border-color: rgba(255,100,100,0.5);
+}
+.fs-quick-btn.fs-quick-mic.active {
+  background: rgba(16,185,129,0.75);
+  border-color: rgba(100,220,160,0.5);
 }
 
 /* When feed-wrap is the fullscreen element (real Fullscreen API) */
@@ -486,22 +585,23 @@ body.ios-fs #feed-wrap img {
   aspect-ratio: unset;
 }
 .flip-btn {
-  display: inline-flex; align-items: center; gap: 5px;
-  background: rgba(4,10,4,0.72);
-  backdrop-filter: blur(5px);
-  border: 1px solid rgba(34,197,94,0.15);
+  display: inline-flex; align-items: center; gap: 6px;
+  background: rgba(0,0,0,0.6);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1.5px solid rgba(255,255,255,0.16);
   border-radius: 999px;
-  padding: 4px 10px 4px 8px;
-  font-size: 12px; font-weight: 500;
-  color: rgba(255,255,255,0.7);
+  padding: clamp(6px, 1.2vw, 10px) clamp(12px, 3vw, 20px) clamp(6px, 1.2vw, 10px) clamp(10px, 2.5vw, 16px);
+  font-size: clamp(12px, 3vw, 15px); font-weight: 500;
+  color: rgba(255,255,255,0.88);
   cursor: pointer;
   transition: background 0.15s, border-color 0.15s, color 0.15s;
   white-space: nowrap;
   user-select: none;
 }
 .flip-btn:hover {
-  background: rgba(34,197,94,0.15);
-  border-color: rgba(34,197,94,0.35);
+  background: rgba(255,255,255,0.12);
+  border-color: rgba(255,255,255,0.3);
   color: #fff;
 }
 .flip-btn.active {

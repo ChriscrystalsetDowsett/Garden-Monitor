@@ -6,7 +6,22 @@ let activeIdx     = null;
 let recRunning    = false;
 let tlRunning     = false;
 let camEnabled    = true;
-let drawerHasAudio = false;
+let drawerHasAudio  = false;
+let drawerAudioOn   = false;
+let _drawerFakeFS   = false;
+
+// Native fullscreen is unavailable on iOS Safari for non-video elements
+// (webkitRequestFullscreen only exists on <video> in WebKit).
+const _dsw = document.getElementById('drawer-stream-wrap');
+const _drawerFSSupport = !!(_dsw && (_dsw.requestFullscreen || _dsw.webkitRequestFullscreen));
+
+// ── Web Audio state (dashboard live streaming) ────────────────────────────────
+const _D_AUDIO_SR      = 16000;
+const _D_AUDIO_AHEAD   = 0.06;
+let   _dAudioCtx       = null;
+let   _dAudioReader    = null;
+let   _dAudioNext      = 0;
+let   _dAudioLeftover  = null;
 let pollTimer     = null;
 let toastTimer    = null;
 // Pull-based stream (iOS Safari compatible — MJPEG is not supported in Safari)
@@ -148,10 +163,37 @@ function openDrawer(tile) {
   document.getElementById('drawer').classList.add('open');
 
   drawerHasAudio = false;
+  _stopDrawerAudio();
   _startDrawerStream();
   fetchStatus();
   fetchCamInfo();
   pollTimer = setInterval(fetchStatus, 3000);
+}
+
+function drawerFullscreen() {
+  if (_drawerFSSupport) {
+    const inFS = !!(document.fullscreenElement || document.webkitFullscreenElement);
+    if (!inFS) {
+      (_dsw.requestFullscreen || _dsw.webkitRequestFullscreen).call(_dsw).catch(() => {});
+    } else {
+      (document.exitFullscreen || document.webkitExitFullscreen).call(document);
+    }
+  } else {
+    // iOS fallback — cover viewport with CSS
+    _drawerFakeFS = !_drawerFakeFS;
+    document.body.classList.toggle('drawer-fake-fs', _drawerFakeFS);
+    _syncDrawerFSBtn();
+  }
+}
+
+function _syncDrawerFSBtn() {
+  const btn = document.getElementById('drawer-fs-btn');
+  if (!btn) return;
+  const inFS = !!(document.fullscreenElement || document.webkitFullscreenElement) || _drawerFakeFS;
+  btn.title = inFS ? 'Exit fullscreen' : 'Fullscreen';
+  btn.innerHTML = inFS
+    ? `<svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 2 2 2 2 6"/><polyline points="10 14 14 14 14 10"/><line x1="2" y1="2" x2="7" y2="7"/><line x1="14" y1="14" x2="9" y2="9"/></svg> Exit`
+    : `<svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="10 2 14 2 14 6"/><polyline points="6 14 2 14 2 10"/><line x1="14" y1="2" x2="9" y2="7"/><line x1="2" y1="14" x2="7" y2="9"/></svg> Fullscreen`;
 }
 
 function closeDrawer() {
@@ -162,7 +204,12 @@ function closeDrawer() {
   recRunning   = false;
   tlRunning    = false;
   tlDashStart  = null;
+  if (_drawerFakeFS) {
+    _drawerFakeFS = false;
+    document.body.classList.remove('drawer-fake-fs');
+  }
 
+  _stopDrawerAudio();
   document.getElementById('drawer').classList.remove('open');
   document.getElementById('drawer-backdrop').classList.remove('visible');
 
@@ -231,6 +278,8 @@ async function fetchCamInfo() {
     drawerHasAudio = d.audio_available === true;
     const hint = document.querySelector('#btn-record .btn-hint');
     if (hint) hint.textContent = drawerHasAudio ? 'High quality · audio' : 'High quality';
+    const audioBtn = document.getElementById('drawer-audio-btn');
+    if (audioBtn) audioBtn.classList.toggle('visible', drawerHasAudio);
   } catch (_) {}
 }
 
@@ -284,10 +333,8 @@ function updateTileBadges(idx) {
 }
 
 function updateCamToggle() {
-  const btn  = document.getElementById('btn-cam-toggle');
-  const hint = document.getElementById('cam-enable-hint');
+  const btn = document.getElementById('btn-cam-toggle');
   btn.classList.toggle('off', !camEnabled);
-  hint.textContent = camEnabled ? 'Enabled' : 'Paused';
 }
 
 async function toggleCameraEnabled() {
@@ -393,6 +440,102 @@ async function toggleTimelapse() {
   }
 }
 
+/* ── Live audio ─────────────────────────────────────────────────────────────── */
+
+const _MIC_PATH_D = '<path d="M12 2a3 3 0 0 1 3 3v7a3 3 0 0 1-6 0V5a3 3 0 0 1 3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="22"/>';
+const _MIC_ON_D   = `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${_MIC_PATH_D}</svg>`;
+const _MIC_OFF_D  = `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${_MIC_PATH_D}<line x1="2" y1="2" x2="22" y2="22"/></svg>`;
+
+function _fetchStreamingSupportedD() {
+  return typeof ReadableStream !== 'undefined' &&
+         typeof ReadableStream.prototype.getReader === 'function';
+}
+
+function toggleDrawerAudio() {
+  if (activeIdx === null) return;
+  if (!drawerAudioOn) {
+    // Create/resume AudioContext synchronously in the gesture handler for iOS Safari.
+    if (!_dAudioCtx) {
+      _dAudioCtx = new (window.AudioContext || window.webkitAudioContext)({ latencyHint: 'interactive' });
+    }
+    if (_dAudioCtx.state === 'suspended') _dAudioCtx.resume();
+    drawerAudioOn = true;
+    _updateDrawerAudioBtn();
+    if (_fetchStreamingSupportedD()) {
+      _startDrawerAudio(`/dashboard/cam/${activeIdx}/proxy/api/audio/stream/raw`);
+    } else {
+      // iOS Safari fallback: use an <audio> element with the Ogg stream.
+      const audio = document.getElementById('drawer-audio');
+      audio.src = `/dashboard/cam/${activeIdx}/proxy/api/audio/stream`;
+      audio.play().catch(() => {});
+    }
+  } else {
+    _stopDrawerAudio();
+  }
+}
+
+async function _startDrawerAudio(url) {
+  try {
+    const resp = await fetch(url);
+    if (!resp.ok || !resp.body || typeof resp.body.getReader !== 'function') {
+      // Runtime fallback to <audio> element.
+      drawerAudioOn = true;
+      const audio = document.getElementById('drawer-audio');
+      audio.src = `/dashboard/cam/${activeIdx}/proxy/api/audio/stream`;
+      audio.play().catch(() => {});
+      return;
+    }
+    _dAudioReader   = resp.body.getReader();
+    _dAudioNext     = _dAudioCtx.currentTime + _D_AUDIO_AHEAD;
+    _dAudioLeftover = null;
+    while (true) {
+      const { done, value } = await _dAudioReader.read();
+      if (done) break;
+      let data = value;
+      if (_dAudioLeftover) {
+        const m = new Uint8Array(_dAudioLeftover.length + value.length);
+        m.set(_dAudioLeftover); m.set(value, _dAudioLeftover.length);
+        data = m; _dAudioLeftover = null;
+      }
+      const usable = data.length & ~1;
+      if (data.length & 1) _dAudioLeftover = data.slice(usable);
+      if (usable === 0) continue;
+      const samples = usable >> 1;
+      const f32     = new Float32Array(samples);
+      for (let i = 0; i < samples; i++) {
+        f32[i] = ((data[i*2] | (data[i*2+1] << 8)) << 16 >> 16) / 32768.0;
+      }
+      const buf = _dAudioCtx.createBuffer(1, samples, _D_AUDIO_SR);
+      buf.copyToChannel(f32, 0);
+      const src = _dAudioCtx.createBufferSource();
+      src.buffer = buf;
+      src.connect(_dAudioCtx.destination);
+      const now = _dAudioCtx.currentTime;
+      if (_dAudioNext < now) _dAudioNext = now + _D_AUDIO_AHEAD;
+      src.start(_dAudioNext);
+      _dAudioNext += samples / _D_AUDIO_SR;
+    }
+  } catch (_) { /* stream cancelled or connection lost */ }
+  if (drawerAudioOn) { drawerAudioOn = false; _updateDrawerAudioBtn(); }
+}
+
+function _stopDrawerAudio() {
+  if (_dAudioReader) { _dAudioReader.cancel(); _dAudioReader = null; }
+  _dAudioLeftover = null;
+  const audio = document.getElementById('drawer-audio');
+  if (audio) { audio.pause(); audio.src = ''; }
+  drawerAudioOn   = false;
+  _updateDrawerAudioBtn();
+}
+
+function _updateDrawerAudioBtn() {
+  const btn = document.getElementById('drawer-audio-btn');
+  if (!btn) return;
+  btn.classList.toggle('active', drawerAudioOn);
+  btn.title     = drawerAudioOn ? 'Mute Audio' : 'Unmute Audio';
+  btn.innerHTML = drawerAudioOn ? _MIC_ON_D : _MIC_OFF_D;
+}
+
 /* ── Helpers ─────────────────────────────────────────────────────────────────── */
 
 function camFetch(idx, path, method = 'GET', body = null) {
@@ -411,6 +554,11 @@ function showToast(msg) {
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => t.classList.remove('show'), 3200);
 }
+
+/* ── Fullscreen change (sync button icon for native fullscreen) ─────────────── */
+
+document.addEventListener('fullscreenchange',       _syncDrawerFSBtn);
+document.addEventListener('webkitfullscreenchange', _syncDrawerFSBtn);
 
 /* ── Keyboard ────────────────────────────────────────────────────────────────── */
 

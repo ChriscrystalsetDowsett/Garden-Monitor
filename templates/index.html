@@ -8,7 +8,7 @@
 <meta name="apple-mobile-web-app-title" content="Garden Cams">
 <link rel="apple-touch-icon" sizes="180x180" href="/static/icon-180.png">
 <title>Home Garden Cameras</title>
-<link rel="stylesheet" href="/static/index.css">
+<link rel="stylesheet" href="/static/index.css?v=5">
 </head>
 <body>
 <div class="container">
@@ -62,7 +62,7 @@
         </div>
       </div>
       <button class="feed-cam-toggle" id="cam-toggle-btn" onclick="toggleCamera()">
-        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <path d="M18.36 6.64A9 9 0 0 1 20.77 14"/>
           <path d="M6.16 6.16a9 9 0 1 0 12.68 12.68"/>
           <line x1="12" y1="2" x2="12" y2="6"/>
@@ -73,7 +73,7 @@
     </div>
     <div class="feed-flip-btns">
       <button class="flip-btn" id="feed-hflip-btn" onclick="toggleFeedFlip('hflip')">
-        <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+        <svg width="18" height="18" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
           <line x1="8" y1="2" x2="8" y2="14"/>
           <polyline points="5 5 2 8 5 11"/>
           <polyline points="11 5 14 8 11 11"/>
@@ -81,7 +81,7 @@
         H-Flip
       </button>
       <button class="flip-btn" id="feed-vflip-btn" onclick="toggleFeedFlip('vflip')">
-        <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+        <svg width="18" height="18" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
           <line x1="2" y1="8" x2="14" y2="8"/>
           <polyline points="5 5 8 2 11 5"/>
           <polyline points="5 11 8 14 11 11"/>
@@ -89,14 +89,34 @@
         V-Flip
       </button>
     </div>
+    <!-- ── Swipe-to-pan/tilt joystick indicator (shown during touch drag) ── -->
+    <div id="servo-joystick">
+      <div id="servo-ring"></div>
+      <div id="servo-dot"></div>
+    </div>
+    <!-- ── Fullscreen quick-action buttons ── -->
+    <div class="fs-quick-btns" id="fs-quick-btns">
+      <button class="fs-quick-btn" id="fsq-photo-btn" onclick="doTakeSnapshot()" title="Take Photo">
+        <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="6" width="20" height="15" rx="2"/><circle cx="12" cy="13" r="3.5"/><path d="M8 6l1.5-3h5L16 6"/></svg>
+      </button>
+      <button class="fs-quick-btn fs-quick-rec" id="fsq-rec-btn" onclick="fsqRecord()" title="Record">
+        <svg width="36" height="36" viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M2 8a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V8z"/><path d="M16 10.5 22 7v10l-6-3.5V10.5z"/></svg>
+      </button>
+      <button class="fs-quick-btn" id="fsq-tl-btn" onclick="startStopTL()" title="Timelapse">
+        <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15.5 15.5"/></svg>
+      </button>
+      <button class="fs-quick-btn fs-quick-mic" id="fsq-mic-btn" onclick="toggleStreamAudio()" title="Toggle Audio" style="display:none">
+        <svg id="fsq-mic-icon" width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a3 3 0 0 1 3 3v7a3 3 0 0 1-6 0V5a3 3 0 0 1 3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="22"/></svg>
+      </button>
+    </div>
     <button class="flip-btn" id="fs-btn" onclick="toggleFullscreen()" title="Toggle fullscreen">
-      <svg id="fs-expand" width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+      <svg id="fs-expand" width="18" height="18" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
         <polyline points="10 2 14 2 14 6"/>
         <polyline points="6 14 2 14 2 10"/>
         <line x1="14" y1="2" x2="9" y2="7"/>
         <line x1="2" y1="14" x2="7" y2="9"/>
       </svg>
-      <svg id="fs-collapse" width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="display:none">
+      <svg id="fs-collapse" width="18" height="18" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="display:none">
         <polyline points="14 10 10 10 10 14"/>
         <polyline points="2 6 6 6 6 2"/>
         <line x1="10" y1="10" x2="15" y2="15"/>
@@ -105,6 +125,9 @@
       Fullscreen
     </button>
   </div>
+
+  <!-- Hidden audio element for live audio streaming -->
+  <audio id="live-audio" style="display:none"></audio>
 
   <!-- ── Action buttons + all panels below live in .inner-content ── -->
   <div class="inner-content">
@@ -253,6 +276,6 @@
 <!-- ── Toast ── -->
 <div class="toast" id="toast"></div>
 
-<script src="/static/index.js"></script>
+<script src="/static/index.js?v=3"></script>
 </body>
 </html>

@@ -43,6 +43,13 @@ TILE_QUALITY       = _dash.get("tile_quality", "low")
 DASHBOARD_PASSWORD = _dash.get("password", "")
 SECRET_KEY         = _dash.get("secret_key", "dev-secret-key")
 
+# ── Servo pan/tilt ────────────────────────────────────────────────────────────
+_servo         = _cfg.get("servo", {})
+SERVO_ENABLED  = bool(_servo.get("enabled", False))
+SERVO_PAN_PIN  = int(_servo.get("pan_pin",  18))
+SERVO_TILT_PIN = int(_servo.get("tilt_pin", 19))
+SERVO_SPEED    = max(0.0, min(1.0, float(_servo.get("speed", 0.8))))
+
 # ── Camera schedule ───────────────────────────────────────────────────────────
 _sched             = _cfg.get("schedule", {})
 SCHEDULE_ENABLED   = bool(_sched.get("enabled", False))
@@ -64,7 +71,7 @@ CAM_CTRL_DEFAULTS = {
     "exposure_time":   0,       # 0 = auto (Aperture Priority); µs otherwise (V4L2 units ×100µs)
     "analogue_gain":   0.0,     # 0 = auto; otherwise maps to V4L2 gain 0–255
     "awb_mode":       "auto",   # "auto" | "manual"
-    "awb_kelvin":      5600,    # colour temperature K (2000–7500), active when awb_mode=manual
+    "awb_kelvin":      5000,    # colour temperature K (2000–7500), active when awb_mode=manual
     "brightness":      0,       # −100…+100 → V4L2 0–255 (neutral 128)
     "saturation":      0,       # −100…+100 → V4L2 0–255 (neutral 128)
     "sharpness":       1.0,     # 0–4 → V4L2 0–255 (neutral 128)
@@ -75,6 +82,7 @@ CAM_CTRL_DEFAULTS = {
     "af_range": "normal",       # "normal" (30cm–∞) | "macro" (3–30cm) | "full" (3cm–∞)
     # Post-capture: OpenCV per-frame
     "tint":        0,           # −100 (green) … +100 (magenta)
+    "warmth":      0,          # −100 (cool/blue) … +100 (warm/orange); default corrects C930e cold bias
     "hflip":       bool(_cfg["camera"].get("hflip", False)),
     "vflip":       bool(_cfg["camera"].get("vflip", False)),
     "film_filter": "none",

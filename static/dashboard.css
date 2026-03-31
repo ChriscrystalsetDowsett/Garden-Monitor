@@ -358,6 +358,33 @@ header::after {
   object-fit: contain;
   display: block;
 }
+.drawer-audio-btn {
+  position: absolute;
+  bottom: 10px;
+  right: 10px;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: rgba(0,0,0,0.5);
+  border: 1.5px solid rgba(255,255,255,0.22);
+  color: rgba(255,255,255,0.9);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  transition: background 0.15s, transform 0.1s;
+  z-index: 5;
+}
+.drawer-audio-btn.visible { display: flex; }
+.drawer-audio-btn:hover { background: rgba(255,255,255,0.12); }
+.drawer-audio-btn:active { transform: scale(0.9); }
+.drawer-audio-btn.active {
+  background: rgba(16,185,129,0.75);
+  border-color: rgba(100,220,160,0.5);
+}
+
 #drawer-offline-msg {
   position: absolute;
   inset: 0;
@@ -441,14 +468,66 @@ header::after {
   color: var(--amber-lt);
 }
 
-/* Camera enable/disable button */
-.cam-enable-btn:hover { border-color: rgba(34,197,94,0.45); }
-.cam-enable-btn.off {
-  background: rgba(239,68,68,0.08);
-  border-color: rgba(239,68,68,0.4);
-  color: var(--red);
+/* ── Drawer stream overlay buttons (camera toggle + fullscreen) ── */
+.drawer-overlay-btn {
+  position: absolute;
+  top: 10px;
+  display: inline-flex; align-items: center; gap: 6px;
+  background: rgba(0,0,0,0.6);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1.5px solid rgba(255,255,255,0.16);
+  border-radius: 999px;
+  padding: 6px 13px 6px 10px;
+  font-size: 12px; font-weight: 500;
+  color: rgba(255,255,255,0.88);
+  cursor: pointer;
+  text-decoration: none;
+  white-space: nowrap;
+  z-index: 5;
+  transition: background 0.15s, border-color 0.15s;
+  user-select: none;
 }
-.cam-enable-btn.off:hover { border-color: var(--red); }
+.drawer-overlay-btn:hover {
+  background: rgba(255,255,255,0.12);
+  border-color: rgba(255,255,255,0.3);
+  color: #fff;
+}
+.drawer-cam-toggle-btn { left: 10px; }
+.drawer-cam-toggle-btn.off {
+  border-color: rgba(239,68,68,0.5);
+  color: rgba(239,68,68,0.9);
+}
+.drawer-cam-toggle-btn.off:hover {
+  background: rgba(239,68,68,0.12);
+  border-color: rgba(239,68,68,0.7);
+}
+.drawer-fs-btn { right: 10px; }
+
+/* iOS / fallback fake-fullscreen: expand the drawer itself to full screen.
+   We cannot use position:fixed on a child because #drawer has transform which
+   creates a new containing block, trapping any fixed children inside it. */
+body.drawer-fake-fs #drawer {
+  top: 0 !important;
+  max-height: none !important;
+  height: 100dvh;
+  border-radius: 0;
+  overflow: hidden;
+}
+/* Hide everything except the stream so it fills the drawer */
+body.drawer-fake-fs .drawer-handle,
+body.drawer-fake-fs .drawer-header,
+body.drawer-fake-fs .drawer-actions,
+body.drawer-fake-fs .drawer-full-wrap,
+body.drawer-fake-fs .drawer-status,
+body.drawer-fake-fs .drawer-tl-strip {
+  display: none !important;
+}
+body.drawer-fake-fs .drawer-stream-wrap {
+  max-height: none !important;
+  height: 100dvh;
+  aspect-ratio: unset !important;
+}
 
 @keyframes blink {
   0%, 100% { opacity: 1; }
@@ -456,9 +535,9 @@ header::after {
 }
 
 
-/* In-drawer full controls link (mobile only) */
+/* In-drawer full controls link */
 .drawer-full-wrap {
-  display: none;  /* shown via media query on mobile */
+  display: block;
   padding: 0 18px 4px;
 }
 .drawer-full-btn {

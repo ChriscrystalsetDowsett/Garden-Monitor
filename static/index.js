@@ -22,6 +22,15 @@ let   filterPanelOpen = false;
 let   resDDOpen    = false;
 let   recCrf       = 23;
 let   recAudio     = true;
+let   streamAudio  = false;   // live audio playback while watching the feed
+
+// ── Web Audio state (live streaming) ─────────────────────────────────────────
+const _AUDIO_SR       = 16000;   // sample rate of /api/audio/stream/raw
+const _AUDIO_AHEAD    = 0.06;    // seconds to schedule ahead (60 ms look-ahead)
+let   _audioCtx       = null;
+let   _audioReader    = null;
+let   _audioNext      = 0;
+let   _audioLeftover  = null;
 let   recTargetRes = '1280x720';
 let   snapFilter   = 'none';
 let   snapQuality  = 95;
@@ -176,8 +185,138 @@ function _applyFSState(inFS) {
   document.getElementById('fs-btn').classList.toggle('active', inFS);
 }
 
+// ── Fullscreen quick-action buttons ───────────────────────────────────────────
+function fsqRecord() {
+  if (recording) { stopRecording(); } else { startRecording(); }
+}
+
+function updateFSQuickBtns() {
+  const recBtn = document.getElementById('fsq-rec-btn');
+  const tlBtn  = document.getElementById('fsq-tl-btn');
+  if (!recBtn || !tlBtn) return;
+  if (recording) {
+    recBtn.classList.add('active');
+    recBtn.innerHTML = '<svg width="32" height="32" viewBox="0 0 24 24" fill="currentColor" stroke="none"><rect x="3" y="3" width="18" height="18" rx="3"/></svg>';
+    recBtn.title = 'Stop Recording';
+  } else {
+    recBtn.classList.remove('active');
+    recBtn.innerHTML = '<svg width="36" height="36" viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M2 8a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V8z"/><path d="M16 10.5 22 7v10l-6-3.5V10.5z"/></svg>';
+    recBtn.title = 'Record';
+  }
+  if (tlRunning) {
+    tlBtn.classList.add('active');
+    tlBtn.innerHTML = '<svg width="32" height="32" viewBox="0 0 24 24" fill="currentColor" stroke="none"><rect x="3" y="3" width="18" height="18" rx="3"/></svg>';
+    tlBtn.title = 'Stop Timelapse';
+  } else {
+    tlBtn.classList.remove('active');
+    tlBtn.innerHTML = '<svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15.5 15.5"/></svg>';
+    tlBtn.title = 'Timelapse';
+  }
+}
+
 document.addEventListener('fullscreenchange',       () => _applyFSState(!!(document.fullscreenElement || document.webkitFullscreenElement)));
 document.addEventListener('webkitfullscreenchange', () => _applyFSState(!!(document.fullscreenElement || document.webkitFullscreenElement)));
+
+// ── Swipe-to-pan/tilt (fullscreen only) ───────────────────────────────────────
+//
+// A single-finger drag on the feed translates to a servo velocity command:
+//   horizontal displacement → pan  (-1 = full left,  +1 = full right)
+//   vertical displacement   → tilt (-1 = full down,  +1 = full up)
+//
+// Drag distance from the touch origin controls speed.  A dead zone of
+// SERVO_DEAD_PX at the centre prevents accidental movement on taps.
+// Commands are throttled to one per SERVO_THROTTLE_MS.
+
+const SERVO_DEAD_PX    = 12;    // px — ignore sub-threshold movement
+const SERVO_MAX_PX     = 90;    // px — reach full speed at this displacement
+const SERVO_THROTTLE_MS = 50;   // ms — max 20 commands/sec
+const SERVO_RING_R      = 42;   // px — joystick ring radius for visual clamp
+
+let _st   = null;   // active touch: { id, x0, y0 } or null
+let _stTs = 0;      // timestamp of last command sent
+
+function _inFS() {
+  return !!(document.fullscreenElement || document.webkitFullscreenElement || _iosFakeFS);
+}
+
+function _servoNorm(delta) {
+  const sign = delta < 0 ? -1 : 1;
+  const abs  = Math.abs(delta);
+  if (abs < SERVO_DEAD_PX) return 0;
+  return sign * Math.min(1.0, (abs - SERVO_DEAD_PX) / (SERVO_MAX_PX - SERVO_DEAD_PX));
+}
+
+function _servoSend(pan, tilt) {
+  fetch('/api/servo/move', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({pan, tilt}),
+  }).catch(() => {});
+}
+
+function _servoStop() {
+  _st = null;
+  _sjHide();
+  fetch('/api/servo/stop', {method: 'POST'}).catch(() => {});
+}
+
+// ── Joystick visual ────────────────────────────────────────────────────────────
+function _sjShow(x0, y0, cx, cy) {
+  const wrap = document.getElementById('feed-wrap');
+  const rect = wrap.getBoundingClientRect();
+  const ox = x0 - rect.left;
+  const oy = y0 - rect.top;
+  const ring = document.getElementById('servo-ring');
+  const dot  = document.getElementById('servo-dot');
+  document.getElementById('servo-joystick').classList.add('active');
+  ring.style.left = ox + 'px';
+  ring.style.top  = oy + 'px';
+  // Clamp dot to ring radius
+  const dx   = cx - x0;
+  const dy   = cy - y0;
+  const dist = Math.sqrt(dx * dx + dy * dy);
+  const r    = Math.min(dist, SERVO_RING_R);
+  const ang  = Math.atan2(dy, dx);
+  dot.style.left = (ox + Math.cos(ang) * r) + 'px';
+  dot.style.top  = (oy + Math.sin(ang) * r) + 'px';
+}
+
+function _sjHide() {
+  document.getElementById('servo-joystick').classList.remove('active');
+}
+
+// ── Touch listeners ────────────────────────────────────────────────────────────
+const _feedEl = document.getElementById('feed-wrap');
+
+_feedEl.addEventListener('touchstart', e => {
+  if (!_inFS()) return;
+  // Ignore touches that land on buttons or the top overlay
+  if (e.target.closest('button, .feed-overlay, #res-options')) return;
+  if (_st) return;
+  const t = e.changedTouches[0];
+  _st = {id: t.identifier, x0: t.clientX, y0: t.clientY};
+}, {passive: true});
+
+_feedEl.addEventListener('touchmove', e => {
+  if (!_st) return;
+  const t = Array.from(e.changedTouches).find(c => c.identifier === _st.id);
+  if (!t) return;
+  e.preventDefault();   // block scroll/zoom during active servo drag
+  _sjShow(_st.x0, _st.y0, t.clientX, t.clientY);
+  const now = Date.now();
+  if (now - _stTs < SERVO_THROTTLE_MS) return;
+  _stTs = now;
+  const pan  =  _servoNorm(t.clientX - _st.x0);
+  const tilt = -_servoNorm(t.clientY - _st.y0);  // Y axis inverted: up = positive tilt
+  _servoSend(pan, tilt);
+}, {passive: false});
+
+_feedEl.addEventListener('touchend', e => {
+  if (!_st) return;
+  if (Array.from(e.changedTouches).some(c => c.identifier === _st.id)) _servoStop();
+}, {passive: true});
+
+_feedEl.addEventListener('touchcancel', () => { if (_st) _servoStop(); }, {passive: true});
 
 // ── Camera info ────────────────────────────────────────────────────────────────
 const MODEL_NAMES = {
@@ -216,6 +355,9 @@ async function loadInfo() {
     if (!d.audio_available) {
       document.getElementById('rec-audio-section').style.display = 'none';
       recAudio = false;
+    } else {
+      const micBtn = document.getElementById('fsq-mic-btn');
+      if (micBtn) micBtn.style.display = '';
     }
   } catch (_) {}
 }
@@ -591,6 +733,7 @@ async function startRecording() {
     const ss = String(s % 60).padStart(2, '0');
     btn.innerHTML = '<svg width="10" height="10" viewBox="0 0 16 16" fill="currentColor"><rect x="3" y="3" width="10" height="10" rx="1"/></svg> ' + mm + ':' + ss;
   }, 500);
+  updateFSQuickBtns();
 }
 
 async function stopRecording() {
@@ -608,6 +751,7 @@ async function stopRecording() {
     toast('\u2713 Recording saved \u2014 converting\u2026', 'success');
   }
   setTimeout(loadVideos, 4000);
+  updateFSQuickBtns();
 }
 
 // ── Timelapse interval slider ──────────────────────────────────────────────────
@@ -679,6 +823,7 @@ async function startTL() {
   tlClockTimer = setInterval(_tlClockTick, 1000);
   document.getElementById('tl-live-strip').style.display = '';
   _updateTLStrip(0);
+  updateFSQuickBtns();
 }
 
 async function stopTL() {
@@ -705,6 +850,7 @@ function _tlStopped() {
   startBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="8" cy="8" r="6"/><path d="M8 4v4l2.5 2.5"/></svg> Start Timelapse';
   _showTLIdle();
   document.getElementById('tl-live-strip').style.display = 'none';
+  updateFSQuickBtns();
 }
 
 async function pollTL() {
@@ -871,6 +1017,104 @@ function toggleMic() {
     : '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a3 3 0 0 1 3 3v7a3 3 0 0 1-6 0V5a3 3 0 0 1 3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="22"/></svg> Microphone Off');
 }
 
+// Mic icon SVG paths — 36×36 to match the initial HTML icon size
+const _MIC_PATH = '<path d="M12 2a3 3 0 0 1 3 3v7a3 3 0 0 1-6 0V5a3 3 0 0 1 3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="22"/>';
+const _MIC_ON_SVG  = `<svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${_MIC_PATH}</svg>`;
+const _MIC_OFF_SVG = `<svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${_MIC_PATH}<line x1="2" y1="2" x2="22" y2="22"/></svg>`;
+
+// Returns true if the browser supports Fetch streaming (ReadableStream from fetch).
+// iOS Safari < 14.5 and some older browsers return a non-readable resp.body.
+function _fetchStreamingSupported() {
+  return typeof ReadableStream !== 'undefined' &&
+         typeof ReadableStream.prototype.getReader === 'function';
+}
+
+function toggleStreamAudio() {
+  if (!streamAudio) {
+    // AudioContext must be created/resumed synchronously inside the user-gesture
+    // handler — iOS Safari rejects it if deferred into an async callback.
+    if (!_audioCtx) {
+      _audioCtx = new (window.AudioContext || window.webkitAudioContext)({ latencyHint: 'interactive' });
+    }
+    if (_audioCtx.state === 'suspended') _audioCtx.resume();
+    streamAudio = true;
+    _updateFSQMicBtn();
+    if (_fetchStreamingSupported()) {
+      _startStreamAudio('/api/audio/stream/raw');
+    } else {
+      // Fallback for iOS Safari: use an <audio> element with the Ogg stream.
+      // Higher latency but universally supported.
+      const audio = document.getElementById('live-audio');
+      audio.src = '/api/audio/stream';
+      audio.play().catch(() => {});
+    }
+  } else {
+    streamAudio = false;
+    _stopStreamAudio();
+    _updateFSQMicBtn();
+  }
+}
+
+async function _startStreamAudio(url) {
+  try {
+    const resp = await fetch(url);
+    if (!resp.ok || !resp.body || typeof resp.body.getReader !== 'function') {
+      // Streaming not actually supported at runtime — fall back to <audio>.
+      streamAudio = true;  // keep button on
+      const audio = document.getElementById('live-audio');
+      audio.src = '/api/audio/stream';
+      audio.play().catch(() => {});
+      return;
+    }
+    _audioReader   = resp.body.getReader();
+    _audioNext     = _audioCtx.currentTime + _AUDIO_AHEAD;
+    _audioLeftover = null;
+    while (true) {
+      const { done, value } = await _audioReader.read();
+      if (done) break;
+      let data = value;
+      if (_audioLeftover) {
+        const m = new Uint8Array(_audioLeftover.length + value.length);
+        m.set(_audioLeftover); m.set(value, _audioLeftover.length);
+        data = m; _audioLeftover = null;
+      }
+      const usable = data.length & ~1;
+      if (data.length & 1) _audioLeftover = data.slice(usable);
+      if (usable === 0) continue;
+      const samples = usable >> 1;
+      const f32     = new Float32Array(samples);
+      for (let i = 0; i < samples; i++) {
+        f32[i] = ((data[i*2] | (data[i*2+1] << 8)) << 16 >> 16) / 32768.0;
+      }
+      const buf = _audioCtx.createBuffer(1, samples, _AUDIO_SR);
+      buf.copyToChannel(f32, 0);
+      const src = _audioCtx.createBufferSource();
+      src.buffer = buf;
+      src.connect(_audioCtx.destination);
+      const now = _audioCtx.currentTime;
+      if (_audioNext < now) _audioNext = now + _AUDIO_AHEAD;
+      src.start(_audioNext);
+      _audioNext += samples / _AUDIO_SR;
+    }
+  } catch (_) { /* stream cancelled or connection lost */ }
+  if (streamAudio) { streamAudio = false; _updateFSQMicBtn(); }
+}
+
+function _stopStreamAudio() {
+  if (_audioReader) { _audioReader.cancel(); _audioReader = null; }
+  _audioLeftover = null;
+  const audio = document.getElementById('live-audio');
+  audio.pause(); audio.src = '';
+}
+
+function _updateFSQMicBtn() {
+  const btn = document.getElementById('fsq-mic-btn');
+  if (!btn) return;
+  btn.classList.toggle('active', streamAudio);
+  btn.title = streamAudio ? 'Mute Audio' : 'Unmute Audio';
+  btn.innerHTML = streamAudio ? _MIC_ON_SVG : _MIC_OFF_SVG;
+}
+
 function toggleFilterPanel() {
   if (filterPanelOpen) {
     filterPanelOpen = false;
@@ -914,7 +1158,7 @@ const CTRL_DEFAULTS = {
   exposure_time: 0, analogue_gain: 0.0,
   awb_mode: 'auto', awb_kelvin: 5600,
   sharpness: 1.0, contrast: 1.0, noise_reduction: 'fast',
-  brightness: 0, saturation: 0, tint: 0,
+  brightness: 0, saturation: 0, tint: 0, warmth: 40,
   hflip: false, vflip: false,
   film_filter: 'none',
   film_strength: 100,
@@ -1118,6 +1362,7 @@ function syncCtrlUI() {
     ['ctrl-sl-contrast',  'ctrl-val-contrast',  _ctrl.contrast,       v => v.toFixed(2)],
     ['ctrl-sl-brightness','ctrl-val-brightness',_ctrl.brightness,     v => (v > 0 ? '+' : '') + v],
     ['ctrl-sl-saturation','ctrl-val-saturation',_ctrl.saturation,     v => (v > 0 ? '+' : '') + v],
+    ['ctrl-sl-warmth',    'ctrl-val-warmth',    _ctrl.warmth,         fmtWarmth],
     ['ctrl-sl-tint',      'ctrl-val-tint',      _ctrl.tint,           fmtTint],
   ];
   sliders.forEach(([slId, lblId, val, fmt]) => {
@@ -1164,6 +1409,11 @@ function fmtExposure(v) {
   return (v / 1000).toFixed(1) + ' ms';
 }
 function fmtGain(v) { return v === 0 ? 'Auto' : '×' + v.toFixed(1); }
+function fmtWarmth(v) {
+  if (v === 0) return 'Neutral';
+  if (v > 0)   return '+' + v + ' warm';
+  return Math.abs(v) + ' cool';
+}
 function fmtTint(v) {
   if (v === 0) return 'Neutral';
   if (v > 0)   return '+' + v + ' magenta';

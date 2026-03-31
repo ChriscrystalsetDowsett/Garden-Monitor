@@ -10,14 +10,35 @@ AUDIO_DEVICE = 'plughw:C930e,0'
 def _check_audio_available() -> bool:
     """Return True if the ALSA device in AUDIO_DEVICE exists on this host."""
     try:
-        # AUDIO_DEVICE format: "plughw:<CardName>,<dev>" — extract the card name
         card_name = AUDIO_DEVICE.split(':')[1].split(',')[0]
         cards = Path('/proc/asound/cards').read_text()
         return card_name.lower() in cards.lower()
     except Exception:
         return False
 
+def _get_pulse_source() -> str:
+    """Return the PulseAudio/PipeWire source name matching AUDIO_DEVICE.
+
+    PipeWire runs as the system sound server and holds the ALSA device
+    exclusively.  Using the PulseAudio interface (which PipeWire exposes)
+    allows multiple simultaneous readers without 'device busy' errors.
+    """
+    try:
+        card_name = AUDIO_DEVICE.split(':')[1].split(',')[0].lower()
+        result = subprocess.run(
+            ['pactl', 'list', 'sources', 'short'],
+            capture_output=True, text=True, timeout=3,
+        )
+        for line in result.stdout.splitlines():
+            parts = line.split('\t')
+            if len(parts) >= 2 and card_name in parts[1].lower():
+                return parts[1]
+    except Exception:
+        pass
+    return 'default'
+
 AUDIO_AVAILABLE: bool = _check_audio_available()
+PULSE_SOURCE:    str  = _get_pulse_source() if AUDIO_AVAILABLE else 'default'
 
 
 def _extract_thumbnail(mp4_path: Path) -> None:
@@ -42,16 +63,48 @@ def _convert_recording(src, dst, fps, crf=23, audio_src=None, start_ts=None):
     """Convert a raw MJPEG dump to H.264 MP4; delete source on success."""
     cmd = ['ffmpeg', '-y', '-r', str(fps), '-f', 'mjpeg', '-i', str(src)]
     if audio_src and Path(audio_src).exists() and Path(audio_src).stat().st_size > 0:
-        # Audio filter chain applied at encode time:
-        #   highpass=f=80   — cut rumble and handling noise below 80 Hz
-        #   afftdn=nf=-25   — FFT-based noise reduction (−25 dB noise floor)
-        #   loudnorm        — EBU R128 loudness normalisation (consistent levels)
-        #   acompressor     — gentle dynamic compression to even out peaks/quiet
+        # Audio filter chain — tuned for webcam voice capture (order matters):
+        #
+        #   highpass=f=100       — cut desk vibration / HVAC rumble below 100 Hz;
+        #                          male voice fundamental starts ~85 Hz so nothing
+        #                          useful is lost above 100 Hz
+        #
+        #   lowpass=f=10000      — webcam mics have high self-noise above ~10 kHz;
+        #                          cutting here removes that hiss while keeping full
+        #                          voice presence and sibilance (1 kHz–8 kHz range)
+        #
+        #   afftdn=nf=-25        — FFT noise reduction at −25 dB floor; removes
+        #                          constant fan/background noise without introducing
+        #                          musical-noise artefacts
+        #
+        #   acompressor          — gentle voice compression:
+        #                            threshold=-18dB  starts compressing at a
+        #                                             comfortable speech level
+        #                            ratio=2.5        subtle, not "radio" sounding
+        #                            attack=15ms      slow enough to pass natural
+        #                                             consonant transients unaltered
+        #                            release=250ms    long enough to avoid pumping
+        #                                             between syllables
+        #                            makeup=1         no automatic gain boost
+        #
+        #   loudnorm=I=-18       — −18 LUFS target; louder and more intelligible
+        #                          than the −23 broadcast standard — better for
+        #                          outdoor/ambient monitoring where you want to
+        #                          actually hear what is said
+        #            TP=-1.5     — true-peak ceiling keeps single-pass mode safely
+        #                          below 0 dBFS
+        #            LRA=9       — tighter loudness range (9 LU) evens out the
+        #                          difference between near and far voices
+        #
+        #   alimiter             — brick-wall safety net: catches anything that
+        #                          slips through loudnorm's single-pass estimation
         audio_filters = (
-            "highpass=f=80,"
+            "highpass=f=100,"
+            "lowpass=f=10000,"
             "afftdn=nf=-25,"
-            "loudnorm,"
-            "acompressor=threshold=-18dB:ratio=3:attack=5:release=50"
+            "acompressor=threshold=-18dB:ratio=2.5:attack=15:release=250:makeup=1,"
+            "loudnorm=I=-18:TP=-1.5:LRA=9,"
+            "alimiter=level_in=1:level_out=1:limit=0.9:attack=5:release=50"
         )
         cmd += ['-i', str(audio_src),
                 '-af', audio_filters,
@@ -111,8 +164,8 @@ class VideoRecorder:
                 try:
                     self._audio_proc = subprocess.Popen(
                         ['ffmpeg', '-y',
-                         '-f', 'alsa', '-ar', '48000', '-ac', '2',
-                         '-i', AUDIO_DEVICE,
+                         '-f', 'pulse', '-ar', '48000', '-ac', '2',
+                         '-i', PULSE_SOURCE,
                          str(audio_path)],
                         stderr=subprocess.PIPE, stdout=subprocess.DEVNULL,
                     )
@@ -185,3 +238,54 @@ class VideoRecorder:
 
 
 video_recorder = VideoRecorder()
+
+
+class AudioStreamer:
+    """Streams live audio from the ALSA device to HTTP clients in real time.
+
+    Each subscriber spawns its own ffmpeg process so that it receives a
+    complete Ogg stream (including headers) from the start.  On most Linux
+    systems USB audio devices allow concurrent readers; if the hardware is
+    exclusive the stream simply fails to start without crashing.
+    """
+
+    def subscribe_raw(self):
+        """Generator that yields raw s16le PCM chunks for Web Audio API playback.
+
+        16 kHz mono, signed 16-bit little-endian.  No container overhead means
+        data flows as soon as PulseAudio produces it.  Reads in 512-byte
+        blocks (256 samples = 16 ms) for minimal scheduling jitter.
+        """
+        if not AUDIO_AVAILABLE:
+            return
+        try:
+            proc = subprocess.Popen(
+                ['ffmpeg', '-y',
+                 '-f', 'pulse', '-i', PULSE_SOURCE,
+                 '-af', (
+                     'highpass=f=80,'
+                     'alimiter=level_in=1:level_out=1:limit=0.9:attack=3:release=25'
+                 ),
+                 '-ar', '16000', '-ac', '1',   # output-side resample — always 16 kHz mono
+                 '-f', 's16le',
+                 'pipe:1'],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.DEVNULL,
+            )
+        except Exception:
+            return
+        try:
+            while True:
+                chunk = proc.stdout.read(512)   # 256 samples ≈ 16 ms
+                if not chunk:
+                    break
+                yield chunk
+        finally:
+            proc.terminate()
+            try:
+                proc.wait(timeout=3)
+            except Exception:
+                proc.kill()
+
+
+audio_streamer = AudioStreamer()

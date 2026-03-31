@@ -51,6 +51,19 @@ def _apply_ocv(buf, s):
                 ch[0] = np.clip(ch[0] - strength // 2, 0, 255)
             frame = cv2.merge([c.astype(np.uint8) for c in ch])
 
+        w = s.get("warmth", 0)
+        if w:
+            # Warm: boost R, cut B. Cool: boost B, cut R. Max ±30 levels at ±100.
+            strength = abs(w) * 30 // 100
+            ch = list(cv2.split(frame.astype(np.int16)))
+            if w > 0:
+                ch[2] = np.clip(ch[2] + strength, 0, 255)   # R up
+                ch[0] = np.clip(ch[0] - strength, 0, 255)   # B down
+            else:
+                ch[2] = np.clip(ch[2] - strength, 0, 255)   # R down
+                ch[0] = np.clip(ch[0] + strength, 0, 255)   # B up
+            frame = cv2.merge([c.astype(np.uint8) for c in ch])
+
         ff = s.get("film_filter", "none")
         if ff and ff != "none":
             fd = FILM_FILTERS.get(ff)
@@ -113,9 +126,9 @@ class StreamOutput(io.BufferedIOBase):
 
     def write(self, buf):
         with cam_ctrl_lock:
-            s = {k: cam_ctrl[k] for k in ("tint", "hflip", "vflip", "film_filter", "film_strength")}
+            s = {k: cam_ctrl[k] for k in ("tint", "warmth", "hflip", "vflip", "film_filter", "film_strength")}
         displayed = _apply_ocv(buf, s) if (
-            s["tint"] or s["hflip"] or s["vflip"] or s["film_filter"] != "none"
+            s["tint"] or s["warmth"] or s["hflip"] or s["vflip"] or s["film_filter"] != "none"
         ) else buf
 
         with self.condition:
@@ -221,7 +234,13 @@ class CameraManager:
         if not cap.isOpened():
             cap.release()
             return None
-        cap.set(cv2.CAP_PROP_FOURCC,      cv2.VideoWriter_fourcc(*"MJPG"))
+        # Try MJPEG first (lower CPU); fall back to YUYV if the device no longer
+        # advertises it (e.g. after a firmware/kernel update on the C930e).
+        mjpg = cv2.VideoWriter_fourcc(*"MJPG")
+        cap.set(cv2.CAP_PROP_FOURCC, mjpg)
+        actual = int(cap.get(cv2.CAP_PROP_FOURCC))
+        if actual != mjpg:
+            cap.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*"YUYV"))
         cap.set(cv2.CAP_PROP_FRAME_WIDTH,  w)
         cap.set(cv2.CAP_PROP_FRAME_HEIGHT, h)
         cap.set(cv2.CAP_PROP_FPS,          FPS)
