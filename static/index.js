@@ -26,7 +26,7 @@ let   streamAudio  = false;   // live audio playback while watching the feed
 
 // ── Web Audio state (live streaming) ─────────────────────────────────────────
 const _AUDIO_SR       = 16000;   // sample rate of /api/audio/stream/raw
-const _AUDIO_AHEAD    = 0.06;    // seconds to schedule ahead (60 ms look-ahead)
+const _AUDIO_AHEAD    = 0.15;    // seconds to schedule ahead (150 ms — absorbs PulseAudio burst jitter)
 let   _audioCtx       = null;
 let   _audioReader    = null;
 let   _audioNext      = 0;
@@ -1042,8 +1042,8 @@ function toggleStreamAudio() {
     if (_fetchStreamingSupported()) {
       _startStreamAudio('/api/audio/stream/raw');
     } else {
-      // Fallback for iOS Safari: use an <audio> element with the Ogg stream.
-      // Higher latency but universally supported.
+      // Fallback for Safari: use an <audio> element with the AAC/ADTS stream.
+      // AAC is Apple's own codec — guaranteed to work in Safari's <audio> element.
       const audio = document.getElementById('live-audio');
       audio.src = '/api/audio/stream';
       audio.play().catch(() => {});
@@ -1059,7 +1059,7 @@ async function _startStreamAudio(url) {
   try {
     const resp = await fetch(url);
     if (!resp.ok || !resp.body || typeof resp.body.getReader !== 'function') {
-      // Streaming not actually supported at runtime — fall back to <audio>.
+      // Streaming not actually supported at runtime — fall back to AAC <audio>.
       streamAudio = true;  // keep button on
       const audio = document.getElementById('live-audio');
       audio.src = '/api/audio/stream';

@@ -17,7 +17,7 @@ const _drawerFSSupport = !!(_dsw && (_dsw.requestFullscreen || _dsw.webkitReques
 
 // ── Web Audio state (dashboard live streaming) ────────────────────────────────
 const _D_AUDIO_SR      = 16000;
-const _D_AUDIO_AHEAD   = 0.06;
+const _D_AUDIO_AHEAD   = 0.15;
 let   _dAudioCtx       = null;
 let   _dAudioReader    = null;
 let   _dAudioNext      = 0;
@@ -145,7 +145,6 @@ function openDrawer(tile) {
   activeIdx = parseInt(tile.dataset.idx, 10);
 
   document.getElementById('drawer-title').textContent    = tile.dataset.name;
-  document.getElementById('drawer-full-link').href       = tile.dataset.fullUrl;
   document.getElementById('drawer-full-btn').href        = tile.dataset.fullUrl;
   document.getElementById('drawer-offline-msg').classList.remove('show');
   document.getElementById('drawer-status').textContent   = '';
@@ -464,7 +463,7 @@ function toggleDrawerAudio() {
     if (_fetchStreamingSupportedD()) {
       _startDrawerAudio(`/dashboard/cam/${activeIdx}/proxy/api/audio/stream/raw`);
     } else {
-      // iOS Safari fallback: use an <audio> element with the Ogg stream.
+      // Safari fallback: use an <audio> element with the AAC/ADTS stream.
       const audio = document.getElementById('drawer-audio');
       audio.src = `/dashboard/cam/${activeIdx}/proxy/api/audio/stream`;
       audio.play().catch(() => {});
@@ -478,7 +477,7 @@ async function _startDrawerAudio(url) {
   try {
     const resp = await fetch(url);
     if (!resp.ok || !resp.body || typeof resp.body.getReader !== 'function') {
-      // Runtime fallback to <audio> element.
+      // Runtime fallback to AAC <audio> element.
       drawerAudioOn = true;
       const audio = document.getElementById('drawer-audio');
       audio.src = `/dashboard/cam/${activeIdx}/proxy/api/audio/stream`;

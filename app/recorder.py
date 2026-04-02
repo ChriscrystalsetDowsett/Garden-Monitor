@@ -249,6 +249,46 @@ class AudioStreamer:
     exclusive the stream simply fails to start without crashing.
     """
 
+    def subscribe_aac(self):
+        """Generator that yields AAC/ADTS chunks for the Safari <audio> fallback.
+
+        ADTS is a self-synchronising framing format: each frame carries its own
+        header, so the browser can start decoding mid-stream without needing the
+        beginning of the file.  Safari has native AAC support (Apple's own codec),
+        making this the only format guaranteed to work in Safari's <audio> element.
+        """
+        if not AUDIO_AVAILABLE:
+            return
+        try:
+            proc = subprocess.Popen(
+                ['ffmpeg', '-y',
+                 '-f', 'pulse', '-fragment_size', '4096', '-i', PULSE_SOURCE,
+                 '-af', (
+                     'highpass=f=80,'
+                     'alimiter=level_in=1:level_out=1:limit=0.9:attack=3:release=25'
+                 ),
+                 '-c:a', 'aac', '-b:a', '64k',
+                 '-flush_packets', '1',   # flush every encoded AAC frame immediately
+                 '-f', 'adts',
+                 'pipe:1'],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.DEVNULL,
+            )
+        except Exception:
+            return
+        try:
+            while True:
+                chunk = proc.stdout.read(4096)
+                if not chunk:
+                    break
+                yield chunk
+        finally:
+            proc.terminate()
+            try:
+                proc.wait(timeout=3)
+            except Exception:
+                proc.kill()
+
     def subscribe_raw(self):
         """Generator that yields raw s16le PCM chunks for Web Audio API playback.
 
@@ -261,7 +301,7 @@ class AudioStreamer:
         try:
             proc = subprocess.Popen(
                 ['ffmpeg', '-y',
-                 '-f', 'pulse', '-i', PULSE_SOURCE,
+                 '-f', 'pulse', '-fragment_size', '4096', '-i', PULSE_SOURCE,
                  '-af', (
                      'highpass=f=80,'
                      'alimiter=level_in=1:level_out=1:limit=0.9:attack=3:release=25'

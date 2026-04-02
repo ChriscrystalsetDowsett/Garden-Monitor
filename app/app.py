@@ -145,6 +145,26 @@ def tl_compile_status():
 
 # ── Live audio stream ─────────────────────────────────────────────────────────
 
+@app.route("/api/audio/stream")
+def audio_stream_aac():
+    """Stream live audio as AAC/ADTS — the Safari-compatible fallback format.
+
+    ADTS is self-synchronising and supported natively by Safari's <audio> element.
+    Chrome and Firefox also support it, so this endpoint works everywhere.
+    """
+    if not AUDIO_AVAILABLE:
+        return "", 503
+
+    def generate():
+        yield from audio_streamer.subscribe_aac()
+
+    return Response(
+        generate(),
+        mimetype="audio/aac",
+        headers={"Cache-Control": "no-store, no-cache"},
+    )
+
+
 @app.route("/api/audio/stream/raw")
 def audio_stream_raw():
     """Stream live audio as raw s16le PCM at 16 kHz for Web Audio API playback.

@@ -70,7 +70,14 @@ def _apply_ocv(buf, s):
             if fd:
                 original = frame.copy()
                 if fd.get("bw"):
-                    gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+                    w = fd.get("weights")
+                    if w:
+                        # Weighted channel mix mimicking spectral sensitivity
+                        b_f, g_f, r_f = cv2.split(frame.astype(np.float32))
+                        gray = np.clip(r_f * w[0] + g_f * w[1] + b_f * w[2],
+                                       0, 255).astype(np.uint8)
+                    else:
+                        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
                     gray = fd["curve"][gray]
                     frame = cv2.cvtColor(gray, cv2.COLOR_GRAY2BGR)
                 else:
