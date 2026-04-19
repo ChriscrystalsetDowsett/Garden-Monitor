@@ -497,6 +497,33 @@ body.ios-fs #fs-quick-btns {
 body.ios-fs #fs-btn {
   display: none;
 }
+/* Fullscreen close (×) button — hidden by default, shown only in fullscreen */
+.fs-close-btn {
+  display: none;
+  position: absolute;
+  top: clamp(10px, 2vmin, 20px);
+  right: clamp(10px, 2vmin, 20px);
+  z-index: 20;
+  width:  clamp(40px, 8vmin, 56px);
+  height: clamp(40px, 8vmin, 56px);
+  border-radius: 50%;
+  background: rgba(0,0,0,0.6);
+  border: 1.5px solid rgba(255,255,255,0.16);
+  color: rgba(255,255,255,0.92);
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  transition: background 0.15s, transform 0.1s;
+}
+.fs-close-btn:hover  { background: rgba(255,255,255,0.12); }
+.fs-close-btn:active { transform: scale(0.9); }
+.feed-wrap:fullscreen .fs-close-btn,
+.feed-wrap:-webkit-full-screen .fs-close-btn,
+body.ios-fs .fs-close-btn {
+  display: flex;
+}
 /* Portrait: lift circular buttons above the flip row so they don't collide */
 @media (orientation: portrait) {
   .feed-wrap:fullscreen .fs-quick-btns,

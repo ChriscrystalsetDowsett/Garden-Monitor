@@ -8,7 +8,7 @@
 <meta name="apple-mobile-web-app-title" content="Garden Cams">
 <link rel="apple-touch-icon" sizes="180x180" href="/static/icon-180.png">
 <title>Home Garden Cameras</title>
-<link rel="stylesheet" href="/static/index.css?v=5">
+<link rel="stylesheet" href="/static/index.css?v=6">
 </head>
 <body>
 <div class="container">
@@ -94,6 +94,13 @@
       <div id="servo-ring"></div>
       <div id="servo-dot"></div>
     </div>
+    <!-- ── Fullscreen close button ── -->
+    <button class="fs-close-btn" id="fs-close-btn" onclick="toggleFullscreen()" title="Exit fullscreen" aria-label="Exit fullscreen">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+        <line x1="18" y1="6" x2="6" y2="18"/>
+        <line x1="6" y1="6" x2="18" y2="18"/>
+      </svg>
+    </button>
     <!-- ── Fullscreen quick-action buttons ── -->
     <div class="fs-quick-btns" id="fs-quick-btns">
       <button class="fs-quick-btn" id="fsq-photo-btn" onclick="doTakeSnapshot()" title="Take Photo">
